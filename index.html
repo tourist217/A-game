@@ -1,1 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Бросок яйца в стену</title>
+  <style>
+    body {
+      margin: 0;
+      background: #222;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: sans-serif;
+      color: #eee;
+      user-select: none;
+    }
+    canvas {
+      border: 3px solid #444;
+      background: #87CEEB; /* Небо */
+      cursor: crosshair;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    p { margin-top: 10px; font-size: 14px; color: #aaa; }
+  </style>
+</head>
+<body>
 
+  <canvas id="gameCanvas" width="800" height="500"></canvas>
+  <p>Кликайте мышкой по стене, чтобы бросать яйца!</p>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Параметры стены
+    const wall = {
+      x: 250,
+      y: 100,
+      w: 300,
+      h: 300,
+      text: "ЗДЕСЬ БЫЛ ВАСЯ"
+    };
+
+    const eggs = [];
+    const splats = [];
+
+    // Обработка клика
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const targetX = e.clientX - rect.left;
+      const targetY = e.clientY - rect.top;
+
+      const startX = canvas.width / 2;
+      const startY = canvas.height - 20;
+
+      const dx = targetX - startX;
+      const dy = targetY - startY;
+      const distance = Math.hypot(dx, dy);
+      const speed = 15;
+
+      eggs.push({
+        x: startX,
+        y: startY,
+        vx: (dx / distance) * speed,
+        vy: (dy / distance) * speed,
+        targetX: targetX,
+        targetY: targetY
+      });
+    });
+
+    // Рисование стены
+    function drawWall() {
+      ctx.fillStyle = '#b2533e';
+      ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+
+      ctx.strokeStyle = '#7c2f20';
+      ctx.lineWidth = 2;
+      const rowH = 20;
+      const colW = 40;
+      for (let y = wall.y; y < wall.y + wall.h; y += rowH) {
+        ctx.beginPath();
+        ctx.moveTo(wall.x, y);
+        ctx.lineTo(wall.x + wall.w, y);
+        ctx.stroke();
+
+        const offset = ((y - wall.y) / rowH) % 2 === 0 ? 0 : colW / 2;
+        for (let x = wall.x + offset; x < wall.x + wall.w; x += colW) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, Math.min(y + rowH, wall.y + wall.h));
+          ctx.stroke();
+        }
+      }
+
+      ctx.fillStyle = '#444';
+      ctx.fillRect(wall.x - 10, wall.y - 10, wall.w + 20, 10);
+
+      ctx.save();
+      ctx.font = 'bold 26px Impact, sans-serif';
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'center';
+      ctx.translate(wall.x + wall.w / 2, wall.y + wall.h / 2);
+      ctx.rotate(-0.05);
+      ctx.fillText(wall.text, 0, 0);
+      ctx.restore();
+    }
+
+    // Создание кляксы
+    function createSplat(x, y) {
+      const drops = [];
+      for (let i = 0; i < 8; i++) {
+        drops.push({
+          ox: (Math.random() - 0.5) * 35,
+          oy: (Math.random() - 0.5) * 35,
+          r: Math.random() * 6 + 3
+        });
+      }
+      splats.push({ x, y, drops });
+    }
+
+    // Игровой цикл
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#556B2F';
+      ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+
+      drawWall();
+
+      splats.forEach(s => {
+        ctx.fillStyle = 'rgba(255, 255, 240, 0.7)';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        s.drops.forEach(d => {
+          ctx.beginPath();
+          ctx.arc(s.x + d.ox, s.y + d.oy, d.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ctx.fillStyle = '#FFA500';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y + 2, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#FFA500';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y + 10);
+        ctx.lineTo(s.x + (s.drops[0].ox / 5), s.y + 25);
+        ctx.stroke();
+      });
+
+      for (let i = eggs.length - 1; i >= 0; i--) {
+        const egg = eggs[i];
+        egg.x += egg.vx;
+        egg.y += egg.vy;
+
+        const distToTarget = Math.hypot(egg.targetX - egg.x, egg.targetY - egg.y);
+
+        if (distToTarget < 15 || egg.y <= egg.targetY) {
+          if (
+            egg.x >= wall.x && egg.x <= wall.x + wall.w &&
+            egg.y >= wall.y && egg.y <= wall.y + wall.h
+          ) {
+            createSplat(egg.x, egg.y);
+          }
+          eggs.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.translate(egg.x, egg.y);
+        ctx.fillStyle = '#F5DEB3';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 7, 11, Math.atan2(egg.vy, egg.vx) + Math.PI/2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#D2B48C';
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    update();
+  </script>
+</body>
+</html>

@@ -1,1 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Bug Hunter</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #060709;
+      color: #ffffff;
+      font-family: 'Consolas', monospace;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    /* Игровой оверлей со счетом */
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 1rem;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .score-box { color: #00f3ff; text-shadow: 0 0 8px rgba(0, 243, 255, 0.6); }
+    .lives-box { color: #ff1e42; text-shadow: 0 0 8px rgba(255, 30, 66, 0.6); }
+    
+    canvas {
+      background: radial-gradient(circle at center, #10121a 0%, #060709 100%);
+      display: block;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
+    }
 
+    /* Оверлеи Game Over / Start */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 7, 9, 0.88);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 20;
+    }
+    .overlay h2 {
+      font-size: 2rem;
+      color: #ff1e42;
+      text-shadow: 0 0 15px rgba(255, 30, 66, 0.8);
+      text-transform: uppercase;
+    }
+    .overlay p { color: #8e95a5; font-size: 0.9rem; text-align: center; max-width: 80%; }
+    .btn-action {
+      background: transparent;
+      color: #ffffff;
+      border: 1px solid #ff1e42;
+      padding: 10px 24px;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(255, 30, 66, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: #ff1e42;
+      box-shadow: 0 0 20px rgba(255, 30, 66, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="score-box">ОЧКИ: <span id="valScore">0</span></div>
+    <div class="lives-box">СЕРВЕРЫ: <span id="valLives">❤❤❤</span></div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Экран конца игры -->
+  <div class="overlay" id="screenGameOver" style="display: none;">
+    <h2>PROD УПАЛ!</h2>
+    <p>Баги просочились на боевой сервер. Релиз сорван.</p>
+    <p style="color: #00f3ff;">Финальный счет: <span id="valFinalScore">0</span></p>
+    <button class="btn-action" id="btnRestart">ОТКАТИТЬ РЕЛИЗ [ЗАНОВО]</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const valScore = document.getElementById('valScore');
+    const valLives = document.getElementById('valLives');
+    const screenGameOver = document.getElementById('screenGameOver');
+    const valFinalScore = document.getElementById('valFinalScore');
+    const btnRestart = document.getElementById('btnRestart');
+
+    // Настройка разрешения Canvas
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Состояние игры
+    let score = 0;
+    let lives = 3;
+    let isRunning = true;
+    let animationId = null;
+
+    // Игрок (Корзина/Терминал фикса)
+    const player = {
+      width: 100,
+      height: 18,
+      x: canvas.width / 2 - 50,
+      y: canvas.height - 40,
+      speed: 8,
+      dx: 0
+    };
+
+    // Баги
+    const bugs = [];
+    const bugTypes = [
+      { char: '🐛', score: 10, speedMul: 1 },
+      { char: '🐞', score: 20, speedMul: 1.4 },
+      { char: '☕', score: 30, speedMul: 1.2, isBonus: true }
+    ];
+
+    let spawnTimer = 0;
+
+    // Управление
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    // Управление мышью и тачем
+    window.addEventListener('pointermove', e => {
+      player.x = e.clientX - player.width / 2;
+    });
+
+    function spawnBug() {
+      const type = bugTypes[Math.floor(Math.random() * bugTypes.length)];
+      bugs.push({
+        x: Math.random() * (canvas.width - 40) + 20,
+        y: -30,
+        speed: (2.5 + Math.random() * 2 + (score / 150)) * type.speedMul,
+        type: type,
+        size: 26
+      });
+    }
+
+    function update() {
+      if (!isRunning) return;
+
+      // Движение клавиатурой
+      if (keys['KeyA'] || keys['ArrowLeft']) player.x -= player.speed;
+      if (keys['KeyD'] || keys['ArrowRight']) player.x += player.speed;
+
+      // Ограничение границами экрана
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+      player.y = canvas.height - 40;
+
+      // Спавн багов
+      spawnTimer++;
+      if (spawnTimer > Math.max(25, 60 - Math.floor(score / 40))) {
+        spawnBug();
+        spawnTimer = 0;
+      }
+
+      // Обновление позиций багов
+      for (let i = bugs.length - 1; i >= 0; i--) {
+        const b = bugs[i];
+        b.y += b.speed;
+
+        // Коллизия с игроком (поимка бага)
+        if (
+          b.y + b.size >= player.y &&
+          b.y <= player.y + player.height &&
+          b.x + b.size >= player.x &&
+          b.x <= player.x + player.width
+        ) {
+          score += b.type.score;
+          valScore.textContent = score;
+          bugs.splice(i, 1);
+          continue;
+        }
+
+        // Баг упал в прод (мимо игрока)
+        if (b.y > canvas.height) {
+          if (!b.type.isBonus) {
+            lives--;
+            valLives.textContent = '❤'.repeat(Math.max(0, lives));
+            if (lives <= 0) {
+              gameOver();
+              return;
+            }
+          }
+          bugs.splice(i, 1);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Отрисовка платформы игрока
+      ctx.fillStyle = '#ff1e42';
+      ctx.shadowColor = '#ff1e42';
+      ctx.shadowBlur = 15;
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Текст внутри платформы
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('[DEBUGGER]', player.x + player.width / 2, player.y + 12);
+
+      // Отрисовка багов
+      ctx.font = '24px sans-serif';
+      bugs.forEach(b => {
+        ctx.fillText(b.type.char, b.x, b.y);
+      });
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (isRunning) {
+        animationId = requestAnimationFrame(loop);
+      }
+    }
+
+    function gameOver() {
+      isRunning = false;
+      cancelAnimationFrame(animationId);
+      valFinalScore.textContent = score;
+      screenGameOver.style.display = 'flex';
+    }
+
+    function restart() {
+      score = 0;
+      lives = 3;
+      bugs.length = 0;
+      valScore.textContent = '0';
+      valLives.textContent = '❤❤❤';
+      screenGameOver.style.display = 'none';
+      isRunning = true;
+      loop();
+    }
+
+    btnRestart.addEventListener('click', restart);
+
+    // Запуск цикла
+    loop();
+  </script>
+</body>
+</html>

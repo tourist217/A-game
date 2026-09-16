@@ -5,7 +5,8 @@ const GAMES_CATALOG = [
     desc: 'Лови падающие баги на проде до того, как они дойдут до заказчика!',
     icon: '🐛',
     tag: 'ARCADE',
-    controlsTip: 'Управление: [A] Влево, [D] Вправо, [Пробел] Фикс бага'
+    path: 'games/bug-hunter/index.html',
+    controlsTip: 'Управление: [A] Влево, [D] Вправо или Движение мыши/пальца'
   },
   {
     id: 'coffee-rush',
@@ -13,6 +14,7 @@ const GAMES_CATALOG = [
     desc: 'Напои команду кофе во время утреннего дейли, пока не сгорели дедлайны.',
     icon: '☕',
     tag: 'TIMING',
+    path: '',
     controlsTip: 'Управление: Клик мышью / Тап по чашке'
   }
 ];
@@ -51,12 +53,24 @@ function renderCatalog() {
 function openGame(game) {
   modalTitle.textContent = game.title;
   gameControlsTip.textContent = game.controlsTip;
-  gameViewport.innerHTML = `
-    <div style="text-align: center; font-family: monospace;">
-      <h3 style="color: #ff1e42; margin-bottom: 8px;">[ ${game.title} ]</h3>
-      <p style="color: #00f3ff;">Канал инициализирован. Игра будет подключена на следующем шаге.</p>
-    </div>
-  `;
+  gameViewport.innerHTML = '';
+
+  if (game.path) {
+    // Встраиваем игру изолированно через iframe
+    const iframe = document.createElement('iframe');
+    iframe.src = game.path;
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    gameViewport.appendChild(iframe);
+  } else {
+    gameViewport.innerHTML = `
+      <div style="text-align: center; font-family: monospace;">
+        <h3 style="color: #ff1e42; margin-bottom: 8px;">[ ${game.title} ]</h3>
+        <p style="color: #00f3ff;">Прототип в разработке. Скоро запустим!</p>
+      </div>
+    `;
+  }
 
   gameModal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
@@ -65,6 +79,7 @@ function openGame(game) {
 function closeGame() {
   gameModal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+  // Очищаем вьюпорт, чтобы фоновый процесс и звук игры мгновенно выгрузились из памяти
   gameViewport.innerHTML = '';
 }
 

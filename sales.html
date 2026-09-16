@@ -1,1 +1,561 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Sales & CSM Survival: 60 Seconds</title>
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --card-bg: #151a24;
+      --card-border: #222b3c;
+      --text: #f0f4fc;
+      --text-muted: #6e7d99;
+      --green: #00ff88;
+      --green-glow: rgba(0, 255, 136, 0.4);
+      --red: #ff3366;
+      --red-glow: rgba(255, 51, 102, 0.4);
+    }
 
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .game-container {
+      width: 100%;
+      max-width: 520px;
+      height: 100vh;
+      max-height: 920px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+      position: relative;
+    }
+
+    /* Верхняя панель */
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+    }
+
+    .timer-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+    }
+
+    .timer-val {
+      font-size: 1.5rem;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      transition: color 0.3s;
+    }
+
+    .timer-val.danger {
+      color: var(--red);
+      animation: pulse 1s infinite alternate;
+    }
+
+    .score-wrap {
+      position: relative;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+    }
+
+    .score-val {
+      font-size: 3rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+      color: #fff;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Всплывающие цифры дельты */
+    .floating-feedback {
+      position: absolute;
+      top: -10px;
+      right: -70px;
+      font-size: 1.8rem;
+      font-weight: 900;
+      pointer-events: none;
+      animation: floatUp 0.6s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+    }
+
+    .floating-feedback.pos {
+      color: var(--green);
+      text-shadow: 0 0 14px var(--green-glow);
+    }
+
+    .floating-feedback.neg {
+      color: var(--red);
+      text-shadow: 0 0 14px var(--red-glow);
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 0; transform: translateY(15px) scale(0.7); }
+      40% { opacity: 1; transform: translateY(0) scale(1.1); }
+      100% { opacity: 0; transform: translateY(-40px) scale(0.9); }
+    }
+
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.12); }
+    }
+
+    /* Карточка клиента */
+    .card-zone {
+      position: relative;
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 20px 0;
+      perspective: 1000px;
+    }
+
+    .card {
+      width: 100%;
+      min-height: 240px;
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 24px;
+      padding: 30px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.2s;
+    }
+
+    .card-tag {
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .card-text {
+      font-size: 1.35rem;
+      line-height: 1.4;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .card.swipe-accept {
+      transform: translateX(30px) rotate(4deg) scale(0.96);
+      border-color: var(--green);
+    }
+
+    .card.swipe-reject {
+      transform: translateX(-30px) rotate(-4deg) scale(0.96);
+      border-color: var(--red);
+    }
+
+    /* Кнопки управления */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding-bottom: 10px;
+    }
+
+    .btn {
+      appearance: none;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 22px 14px;
+      border-radius: 20px;
+      font-size: 1.05rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: transform 0.08s ease, box-shadow 0.15s ease, filter 0.15s ease;
+      touch-action: manipulation;
+    }
+
+    .btn:active {
+      transform: scale(0.94);
+      filter: brightness(1.2);
+    }
+
+    .btn-key {
+      font-size: 0.65rem;
+      opacity: 0.7;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .btn-reject {
+      background: linear-gradient(135deg, #ff1a53, #990026);
+      color: #fff;
+      box-shadow: 0 8px 24px var(--red-glow);
+    }
+
+    .btn-accept {
+      background: linear-gradient(135deg, #00ff88, #00994d);
+      color: #0b0e14;
+      box-shadow: 0 8px 24px var(--green-glow);
+    }
+
+    /* Модальное окно финала */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(11, 14, 20, 0.94);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      text-align: center;
+      border-radius: 24px;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .result-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .result-score {
+      font-size: 3.5rem;
+      font-weight: 900;
+      margin-bottom: 20px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .result-rank-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 20px;
+      border-radius: 18px;
+      margin-bottom: 30px;
+      width: 100%;
+    }
+
+    .rank-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .rank-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .restart-btn {
+      width: 100%;
+      padding: 20px;
+      background: #fff;
+      color: #0b0e14;
+      font-size: 1.1rem;
+      font-weight: 900;
+      border: none;
+      border-radius: 18px;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
+      transition: transform 0.1s ease;
+    }
+
+    .restart-btn:active {
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="game-container">
+    <!-- Header: Timer & Score -->
+    <div class="header">
+      <div class="timer-wrap">
+        <span>ВРЕМЯ:</span>
+        <span class="timer-val" id="timer">60</span>
+      </div>
+      <div class="score-wrap">
+        <span class="score-val" id="score">$0</span>
+        <div id="feedback-anchor"></div>
+      </div>
+    </div>
+
+    <!-- Center: Card -->
+    <div class="card-zone">
+      <div class="card" id="card">
+        <div class="card-tag" id="card-tag">Входящий запрос</div>
+        <div class="card-text" id="card-text">Загрузка...</div>
+      </div>
+    </div>
+
+    <!-- Bottom: Action Buttons -->
+    <div class="controls">
+      <button class="btn btn-reject" id="btn-reject">
+        <span>Слить / Послать</span>
+        <span class="btn-key">[ ← СТРЕЛКА ]</span>
+      </button>
+      <button class="btn btn-accept" id="btn-accept">
+        <span>Взять / Закрыть</span>
+        <span class="btn-key">[ СТРЕЛКА → ]</span>
+      </button>
+    </div>
+
+    <!-- Modal: Game Over -->
+    <div class="overlay" id="overlay">
+      <div class="result-title">Квартал закрыт!</div>
+      <div class="result-score" id="final-score">$0</div>
+      <div class="result-rank-box">
+        <div class="rank-label">Твой статус на ретроспективе</div>
+        <div class="rank-title" id="final-rank">-</div>
+      </div>
+      <button class="restart-btn" id="btn-restart">Сыграть ещё раз</button>
+    </div>
+  </div>
+
+  <script>
+    // База из 55 жизненных ситуаций сейлзов и CSM
+    const situations = [
+      { text: "«Мы стартап, сделайте бесплатно, а мы вам пиар в Twitter!»", accept: -300, reject: 400 },
+      { text: "Лид готов платить x3, но договор на 100 страниц надо согласовать за 1 час.", accept: 1200, reject: -500 },
+      { text: "Клиент в субботу в 04:00 пишет капсом: «ВСЁ СЛОМАЛОСЬ СРОЧНО ЗВОНИТЕ»", accept: -400, reject: 300 },
+      { text: "«Оплатим в следующем квартале по гарантийному письму, дайте доступ сейчас»", accept: -800, reject: 500 },
+      { text: "ЛПР согласен на годовой Enterprise, если добавите всего одну «простую» кнопку.", accept: -1000, reject: 400 },
+      { text: "«Мы уходим к вашим конкурентам, потому что у них логотип синий!»", accept: -500, reject: 600 },
+      { text: "Клиент случайно нажал кнопку «Удалить базу» и обвиняет ваш саппорт.", accept: -400, reject: 350 },
+      { text: "Тендер на $100k, но ТЗ явно писали конкуренты под себя до единой запятой.", accept: -600, reject: 800 },
+      { text: "«Сделайте скидку 85%, у нас бюджет утвержден министерством»", accept: -700, reject: 500 },
+      { text: "Клиент просит созвониться на 5 минут без адженды в 18:55 в пятницу.", accept: -350, reject: 400 },
+      { text: "Холодный лид на вебинаре задал 40 вопросов и просит личный аудит бесплатно.", accept: -300, reject: 450 },
+      { text: "«А если мы купим тариф на 1 юзера, им могут пользоваться 50 человек одновременно?»", accept: -400, reject: 500 },
+      { text: "CSM: Клиент не открывал сервис 8 месяцев и требует полный возврат за год.", accept: -600, reject: 550 },
+      { text: "Лид: «Мне не нужна демка, скиньте счёт на годовой тариф максимального уровня»", accept: 1500, reject: -1000 },
+      { text: "«Наш юрист в отпуске на Бали, подпишите нашу оферту без правок»", accept: -900, reject: 400 },
+      { text: "Клиент хочет внедрить CRM за 2 дня силами одного интерна со своей стороны.", accept: -500, reject: 400 },
+      { text: "«Мы выросли в 10 раз за месяц! Переведите нас на индивидуальный SLA»", accept: 1000, reject: -300 },
+      { text: "Бухгалтерия клиента прислала платёжку в формате фото распечатки на телефон.", accept: 200, reject: -100 },
+      { text: "Клиент пришел по реферальной ссылке от вашего лучшего друга.", accept: 800, reject: -600 },
+      { text: "«А докажите мне за 30 секунд презентации, зачем мне вообще ваш софт»", accept: -400, reject: 500 },
+      { text: "Служба безопасности заказчика требует пароли от ваших продакшн-серверов.", accept: -1200, reject: 900 },
+      { text: "Клиент готов продлиться на 3 года вперед с предоплатой 100%.", accept: 2000, reject: -1500 },
+      { text: "CSM: Клиент требует личного менеджера с присутствием у них в офисе каждый день.", accept: -800, reject: 600 },
+      { text: "«У вас всё висит!» (Клиент забыл оплатить свой домашний интернет).", accept: -300, reject: 400 },
+      { text: "Лид заполнил форму: Имя — «asdf», телефон — «123456», бюджет — «миллион».", accept: -500, reject: 500 },
+      { text: "Enterprise-клиент согласен на апгрейд, если счёт выставят сегодняшним числом.", accept: 1300, reject: -700 },
+      { text: "«Уберите НДС из счета, мы не хотим его платить»", accept: -400, reject: 450 },
+      { text: "CSM: Клиент научился пользоваться сервисом и сам настроил все интеграции!", accept: 700, reject: -200 },
+      { text: "«Сделайте интеграцию с нашей самописной базой на MS Access 97 года»", accept: -900, reject: 600 },
+      { text: "Лид требует переписать интерфейс на китайский язык к понедельнику.", accept: -800, reject: 500 },
+      { text: "Заказчик: «Наш генеральный обожает ваш продукт и готов быть амбассадором»", accept: 900, reject: -400 },
+      { text: "«Давайте созвон в Зуме с камерами на 15 человек, чтобы познакомиться»", accept: -350, reject: 300 },
+      { text: "Клиент угрожает отзывом на Хабре, если ему не дадут мерч бесплатно.", accept: -250, reject: 300 },
+      { text: "Срочный апсейл от топ-клиента перед самым закрытием квартального плана.", accept: 1600, reject: -1200 },
+      { text: "«А почему у вас нет кнопки "Сделать всё красиво автоматически"?»", accept: -300, reject: 400 },
+      { text: "Лид готов подписать контракт прямо сейчас, но просит откат на личную карту.", accept: -1500, reject: 1000 },
+      { text: "CSM: Клиент случайно пригласил всю свою компанию (2000 чел) в платный тариф.", accept: 1100, reject: -500 },
+      { text: "«Я не буду читать инструкцию, объясните мне голосом всё с самого начала»", accept: -400, reject: 350 },
+      { text: "Лид просит демо для генерального, финдиректора и шамана компании.", accept: 400, reject: -200 },
+      { text: "«Перенесите дедлайн проекта на 4 месяца назад, у нас горят KPI»", accept: -700, reject: 500 },
+      { text: "Клиент оставляет чаевые в саппорт коробкой пиццы в офис разработчиков.", accept: 500, reject: -100 },
+      { text: "«Мы подписали NDA, теперь вы не имеете права рассказывать коллегам о нас»", accept: -400, reject: 400 },
+      { text: "Лид из Кремниевой Долины просит ночной созвон в 03:00 по вашему времени.", accept: 800, reject: -300 },
+      { text: "«Ваш конкурент дает нам это бесплатно, перебейте предложение деньгами»", accept: -600, reject: 600 },
+      { text: "Клиент отправил подписанный акт через 3 минуты после выставления.", accept: 1000, reject: -500 },
+      { text: "«А ваш облачный софт будет работать глубоко в шахте без интернета?»", accept: -500, reject: 450 },
+      { text: "CSM: Клиент перешел на годовой тариф, чтобы зафиксировать текущую цену.", accept: 1200, reject: -600 },
+      { text: "«Мы передумали платить, верните деньги за уже выполненные доработки»", accept: -800, reject: 700 },
+      { text: "Тимлид разработки шепчет: «Не продавай эту фичу, она сломает весь прод!»", accept: -1000, reject: 800 },
+      { text: "Госзаказчик готов купить софт по тройному тарифу через спецтендер.", accept: 1400, reject: -700 },
+      { text: "«Покажите нам исходный код вашего ядра, наш стажер проверит безопасность»", accept: -900, reject: 700 },
+      { text: "Лид пишет: «У нас сгорел старый вендор, спасите проект, деньги не проблема»", accept: 1700, reject: -900 },
+      { text: "Клиент требует переделать UI в ядовито-розовый, потому что так хочет инвестор.", accept: -500, reject: 400 },
+      { text: "CSM: Клиент продлевается и берет 3 дополнительных платных модуля.", accept: 1300, reject: -600 },
+      { text: "«Мы потеряли логин и пароль админа, восстановите по честному слову»", accept: -400, reject: 400 }
+    ];
+
+    let currentScore = 0;
+    let timeLeft = 60;
+    let timerId = null;
+    let isGameRunning = false;
+    let lastSituationIdx = -1;
+
+    // DOM Elements
+    const timerEl = document.getElementById('timer');
+    const scoreEl = document.getElementById('score');
+    const cardEl = document.getElementById('card');
+    const cardTextEl = document.getElementById('card-text');
+    const btnAccept = document.getElementById('btn-accept');
+    const btnReject = document.getElementById('btn-reject');
+    const overlay = document.getElementById('overlay');
+    const finalScoreEl = document.getElementById('final-score');
+    const finalRankEl = document.getElementById('final-rank');
+    const btnRestart = document.getElementById('btn-restart');
+    const feedbackAnchor = document.getElementById('feedback-anchor');
+
+    function startGame() {
+      currentScore = 0;
+      timeLeft = 60;
+      isGameRunning = true;
+      overlay.classList.remove('active');
+      timerEl.classList.remove('danger');
+      updateScoreUI();
+      timerEl.textContent = timeLeft;
+
+      pickRandomCard();
+
+      clearInterval(timerId);
+      timerId = setInterval(() => {
+        timeLeft--;
+        timerEl.textContent = timeLeft;
+        if (timeLeft <= 10) {
+          timerEl.classList.add('danger');
+        }
+        if (timeLeft <= 0) {
+          endGame();
+        }
+      }, 1000);
+    }
+
+    function pickRandomCard() {
+      let nextIdx;
+      do {
+        nextIdx = Math.floor(Math.random() * situations.length);
+      } while (nextIdx === lastSituationIdx && situations.length > 1);
+
+      lastSituationIdx = nextIdx;
+      cardTextEl.textContent = situations[nextIdx].text;
+    }
+
+    function handleChoice(action) {
+      if (!isGameRunning) return;
+
+      const currentSituation = situations[lastSituationIdx];
+      const delta = action === 'accept' ? currentSituation.accept : currentSituation.reject;
+      currentScore += delta;
+
+      // Card animation
+      cardEl.classList.add(action === 'accept' ? 'swipe-accept' : 'swipe-reject');
+      setTimeout(() => {
+        cardEl.classList.remove('swipe-accept', 'swipe-reject');
+      }, 150);
+
+      // Score Feedback
+      showFeedback(delta);
+      updateScoreUI();
+      pickRandomCard();
+    }
+
+    function updateScoreUI() {
+      const sign = currentScore < 0 ? '-' : '';
+      scoreEl.textContent = `${sign}$${Math.abs(currentScore)}`;
+      scoreEl.style.color = currentScore < 0 ? 'var(--red)' : '#fff';
+    }
+
+    function showFeedback(delta) {
+      const el = document.createElement('div');
+      el.className = `floating-feedback ${delta >= 0 ? 'pos' : 'neg'}`;
+      el.textContent = (delta > 0 ? '+$' : '-$') + Math.abs(delta);
+      feedbackAnchor.appendChild(el);
+
+      setTimeout(() => {
+        el.remove();
+      }, 600);
+    }
+
+    function getRank(score) {
+      if (score < 0) return "Жертва клиентского сервиса 🤡";
+      if (score < 4000) return "Стажер на испытательном сроке 🍼";
+      if (score < 9000) return "Крепкий Мидл-терпила 🛡️";
+      if (score < 15000) return "Гроза дебиторки и ЛПРов 💼";
+      if (score < 22000) return "Сейлз-киллер высшей лиги 🎯";
+      return "Волк с Опенспейса 🐺👑";
+    }
+
+    function endGame() {
+      isGameRunning = false;
+      clearInterval(timerId);
+
+      const sign = currentScore < 0 ? '-' : '';
+      finalScoreEl.textContent = `${sign}$${Math.abs(currentScore)}`;
+      finalScoreEl.style.color = currentScore < 0 ? 'var(--red)' : 'var(--green)';
+      finalRankEl.textContent = getRank(currentScore);
+      overlay.classList.add('active');
+    }
+
+    // Event Listeners: Click / Tap
+    btnAccept.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handleChoice('accept');
+    });
+
+    btnReject.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handleChoice('reject');
+    });
+
+    btnRestart.addEventListener('click', startGame);
+
+    // Event Listeners: Keyboard Arrows
+    window.addEventListener('keydown', (e) => {
+      if (!isGameRunning) return;
+      if (e.key === 'ArrowRight') {
+        handleChoice('accept');
+      } else if (e.key === 'ArrowLeft') {
+        handleChoice('reject');
+      }
+    });
+
+    // Start on load
+    startGame();
+  </script>
+</body>
+</html>

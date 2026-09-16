@@ -47,7 +47,7 @@
     };
 
     const eggs = [];
-    const splats = [];   // Пятна, которые текут и высыхают
+    const splats = [];   // Статичные аккуратные кляксы
     const shards = [];   // Осколки скорлупы
 
     // Обработка клика
@@ -134,7 +134,7 @@
       ctx.restore();
     }
 
-    // Создание разбившегося яйца (клякса + осколки)
+    // Создание разбившегося яйца (скорлупа + статичный шлепок)
     function breakEgg(x, y) {
       // 1. Осколки скорлупы, разлетающиеся в стороны
       const shardCount = 8;
@@ -145,38 +145,35 @@
           x: x,
           y: y,
           vx: Math.cos(angle) * force,
-          vy: Math.sin(angle) * force - 2, // легкий подброс вверх
+          vy: Math.sin(angle) * force - 2.5,
           size: Math.random() * 5 + 4,
           rot: Math.random() * Math.PI,
-          vRot: (Math.random() - 0.5) * 0.2,
+          vRot: (Math.random() - 0.5) * 0.25,
           gravity: 0.18
         });
       }
 
-      // 2. Брызги белка вокруг эпицентра
+      // 2. Брызги белка
       const drops = [];
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 8; i++) {
         drops.push({
-          ox: (Math.random() - 0.5) * 40,
-          oy: (Math.random() - 0.5) * 35,
+          ox: (Math.random() - 0.5) * 36,
+          oy: (Math.random() - 0.5) * 36,
           r: Math.random() * 5 + 3
         });
       }
 
-      // 3. Объект пятна со сползанием
+      // 3. Статичная клякса
       splats.push({
-        originX: x,
-        originY: y,
-        currentY: y,       // Текущая нижняя точка сползания
-        speed: 0.55 + Math.random() * 0.45, // Скорость стекания
-        age: 0,            // Возраст в кадрах
-        maxAge: 240,       // За сколько кадров (~4 сек) полностью застынет
+        x: x,
+        y: y,
         drops: drops,
-        dripXOffset: (Math.random() - 0.5) * 8
+        dripLength: Math.random() * 12 + 10,
+        dripAngleOffset: (Math.random() - 0.5) * 6
       });
     }
 
-    // Главный цикл анимации
+    // Главный цикл игры
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -187,79 +184,41 @@
       // Стена
       drawWall();
 
-      // Ограничиваем рисование клякс областью стены (чтобы подтеки не вылезали за стену)
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(wall.x, wall.y, wall.w, wall.h);
-      ctx.clip();
-
-      // Отрисовка клякс и сползания
+      // Отрисовка клякс на стене
       splats.forEach(s => {
-        s.age++;
-
-        // Пока не высохло — продолжаем плавно сползать вниз с затуханием
-        if (s.age < s.maxAge && s.currentY < wall.y + wall.h - 5) {
-          const friction = Math.max(0, 1 - (s.age / s.maxAge));
-          s.currentY += s.speed * friction;
-        }
-
-        // Прогресс высыхания от 0 (свежее) до 1 (полностью засохло)
-        const dryProgress = Math.min(1, s.age / s.maxAge);
-
-        // Цвета: свежие яркие -> засохшие более темные и матовые
-        const eggWhiteAlpha = 0.7 - dryProgress * 0.25;
-        const yolkR = Math.round(255 - dryProgress * 35);
-        const yolkG = Math.round(165 - dryProgress * 45);
-        const yolkB = Math.round(0);
-
-        // 1. Белок в месте удара
-        ctx.fillStyle = `rgba(255, 255, 240, ${eggWhiteAlpha})`;
+        // Белок (полупрозрачный)
+        ctx.fillStyle = 'rgba(255, 255, 240, 0.72)';
         ctx.beginPath();
-        ctx.ellipse(s.originX, s.originY, 20, 16, 0, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, 18, 0, Math.PI * 2);
         ctx.fill();
 
         // Капли белка вокруг
         s.drops.forEach(d => {
           ctx.beginPath();
-          ctx.arc(s.originX + d.ox, s.originY + d.oy, d.r, 0, Math.PI * 2);
+          ctx.arc(s.x + d.ox, s.y + d.oy, d.r, 0, Math.PI * 2);
           ctx.fill();
         });
 
-        // 2. След сползающего белка
-        if (s.currentY > s.originY + 2) {
-          ctx.fillStyle = `rgba(255, 255, 240, ${eggWhiteAlpha * 0.75})`;
-          ctx.beginPath();
-          ctx.moveTo(s.originX - 10, s.originY);
-          ctx.lineTo(s.originX + 10, s.originY);
-          ctx.lineTo(s.originX + s.dripXOffset + 4, s.currentY);
-          ctx.lineTo(s.originX + s.dripXOffset - 4, s.currentY);
-          ctx.closePath();
-          ctx.fill();
-
-          // Струйка желтка
-          ctx.strokeStyle = `rgb(${yolkR}, ${yolkG}, ${yolkB})`;
-          ctx.lineWidth = 3.5;
-          ctx.beginPath();
-          ctx.moveTo(s.originX, s.originY + 4);
-          ctx.lineTo(s.originX + s.dripXOffset, s.currentY);
-          ctx.stroke();
-        }
-
-        // 3. Желток (стекает вместе с текущей точкой)
-        ctx.fillStyle = `rgb(${yolkR}, ${yolkG}, ${yolkB})`;
+        // Желток
+        ctx.fillStyle = '#FFA500';
         ctx.beginPath();
-        ctx.arc(s.originX + s.dripXOffset, s.currentY, 8.5, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y + 2, 9, 0, Math.PI * 2);
         ctx.fill();
 
-        // Легкий блик на желтке (пока не засох)
-        if (dryProgress < 0.8) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-          ctx.beginPath();
-          ctx.arc(s.originX + s.dripXOffset - 2, s.currentY - 2, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Блик на желтке
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(s.x - 2, s.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Аккуратная маленькая статичная капелька под желтком
+        ctx.strokeStyle = '#FFA500';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y + 9);
+        ctx.lineTo(s.x + s.dripAngleOffset, s.y + 9 + s.dripLength);
+        ctx.stroke();
       });
-      ctx.restore();
 
       // Осколки скорлупы
       for (let i = shards.length - 1; i >= 0; i--) {
@@ -269,7 +228,6 @@
         sh.vy += sh.gravity;
         sh.rot += sh.vRot;
 
-        // Рисуем кусочек скорлупы (треугольник)
         ctx.save();
         ctx.translate(sh.x, sh.y);
         ctx.rotate(sh.rot);
@@ -285,7 +243,6 @@
         ctx.stroke();
         ctx.restore();
 
-        // Удаляем осколки, улетевшие за экран
         if (sh.y > canvas.height + 20) {
           shards.splice(i, 1);
         }
@@ -300,7 +257,6 @@
         const distToTarget = Math.hypot(egg.targetX - egg.x, egg.targetY - egg.y);
 
         if (distToTarget < 15 || egg.y <= egg.targetY) {
-          // Если яйцо попало в стену
           if (
             egg.x >= wall.x && egg.x <= wall.x + wall.w &&
             egg.y >= wall.y && egg.y <= wall.y + wall.h
@@ -311,7 +267,7 @@
           continue;
         }
 
-        // Отрисовка яйца в воздухе
+        // Яйцо в воздухе
         ctx.save();
         ctx.translate(egg.x, egg.y);
         ctx.fillStyle = '#F5DEB3';

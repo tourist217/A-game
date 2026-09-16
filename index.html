@@ -41,7 +41,8 @@
       y: 100,
       w: 300,
       h: 300,
-      text: "ЗДЕСЬ БЫЛ ВАСЯ"
+      part1: "Обучение по ",
+      part2: "Адвант Шоп"
     };
 
     const eggs = [];
@@ -71,11 +72,12 @@
       });
     });
 
-    // Рисование стены
+    // Рисование кирпичной стены
     function drawWall() {
       ctx.fillStyle = '#b2533e';
       ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
 
+      // Кирпичные швы
       ctx.strokeStyle = '#7c2f20';
       ctx.lineWidth = 2;
       const rowH = 20;
@@ -95,16 +97,31 @@
         }
       }
 
+      // Карниз
       ctx.fillStyle = '#444';
       ctx.fillRect(wall.x - 10, wall.y - 10, wall.w + 20, 10);
 
+      // Надпись
       ctx.save();
-      ctx.font = 'bold 26px Impact, sans-serif';
-      ctx.fillStyle = '#111';
-      ctx.textAlign = 'center';
+      ctx.font = 'bold 24px Impact, sans-serif';
       ctx.translate(wall.x + wall.w / 2, wall.y + wall.h / 2);
       ctx.rotate(-0.05);
-      ctx.fillText(wall.text, 0, 0);
+
+      const width1 = ctx.measureText(wall.part1).width;
+      const width2 = ctx.measureText(wall.part2).width;
+      const totalWidth = width1 + width2;
+      const startX = -totalWidth / 2;
+
+      ctx.textAlign = 'left';
+
+      // "Обучение по " — черный цвет
+      ctx.fillStyle = '#111';
+      ctx.fillText(wall.part1, startX, 0);
+
+      // "Адвант Шоп" — синий цвет
+      ctx.fillStyle = '#0055ff';
+      ctx.fillText(wall.part2, startX + width1, 0);
+
       ctx.restore();
     }
 
@@ -125,28 +142,35 @@
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Земля
       ctx.fillStyle = '#556B2F';
       ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
 
+      // Рисуем стену
       drawWall();
 
+      // Рисуем кляксы
       splats.forEach(s => {
+        // Белок
         ctx.fillStyle = 'rgba(255, 255, 240, 0.7)';
         ctx.beginPath();
         ctx.arc(s.x, s.y, 18, 0, Math.PI * 2);
         ctx.fill();
 
+        // Брызги
         s.drops.forEach(d => {
           ctx.beginPath();
           ctx.arc(s.x + d.ox, s.y + d.oy, d.r, 0, Math.PI * 2);
           ctx.fill();
         });
 
+        // Желток
         ctx.fillStyle = '#FFA500';
         ctx.beginPath();
         ctx.arc(s.x, s.y + 2, 9, 0, Math.PI * 2);
         ctx.fill();
 
+        // Подтек
         ctx.strokeStyle = '#FFA500';
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -155,6 +179,7 @@
         ctx.stroke();
       });
 
+      // Полет яиц
       for (let i = eggs.length - 1; i >= 0; i--) {
         const egg = eggs[i];
         egg.x += egg.vx;
@@ -173,6 +198,7 @@
           continue;
         }
 
+        // Яйцо в полете
         ctx.save();
         ctx.translate(egg.x, egg.y);
         ctx.fillStyle = '#F5DEB3';

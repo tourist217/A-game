@@ -101,7 +101,7 @@
       ctx.fillStyle = '#444';
       ctx.fillRect(wall.x - 10, wall.y - 10, wall.w + 20, 10);
 
-      // Надпись (менее жирный шрифт)
+      // Надпись
       ctx.save();
       ctx.font = 'bold 22px Arial, sans-serif';
       ctx.translate(wall.x + wall.w / 2, wall.y + wall.h / 2);
@@ -114,12 +114,19 @@
 
       ctx.textAlign = 'left';
 
-      // "Обучение по " — черный цвет
+      // Настройки белой окантовки
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineJoin = 'round';
+
+      // 1. "Обучение по " — черный с белой обводкой
+      ctx.strokeText(wall.part1, startX, 0);
       ctx.fillStyle = '#111';
       ctx.fillText(wall.part1, startX, 0);
 
-      // "Адвант Шоп" — синий цвет
-      ctx.fillStyle = '#0055ff';
+      // 2. "Адвант Шоп" — яркий синий с белой обводкой
+      ctx.strokeText(wall.part2, startX + width1, 0);
+      ctx.fillStyle = '#0088ff';
       ctx.fillText(wall.part2, startX + width1, 0);
 
       ctx.restore();

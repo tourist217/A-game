@@ -99,11 +99,14 @@
     const screenWin = document.getElementById('screenWin');
     const btnRestart = document.getElementById('btnRestart');
 
-    // Настройка целевого объекта
+    // Загрузка локального изображения
+    const targetImg = new Image();
+    targetImg.src = 'target.png';
+
     const TARGET_CONFIG = {
-      displayChar: '🍌', // Замени на нужный эмодзи
-      size: 34,
-      hitRadius: 36
+      width: 44,        // Ширина картинки на карте
+      height: 44,       // Высота картинки на карте
+      hitRadius: 32     // Радиус срабатывания пинка
     };
 
     function resize() {

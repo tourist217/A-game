@@ -12,7 +12,7 @@
       user-select: none;
     }
     body {
-      background: #0a0b10;
+      background: #08090d;
       color: #ffffff;
       font-family: 'Consolas', monospace;
       overflow: hidden;
@@ -39,7 +39,7 @@
 
     canvas {
       display: block;
-      background: #10121a;
+      background: #0e1017;
       box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
     }
 
@@ -88,7 +88,7 @@
 
   <div class="overlay" id="screenWin" style="display: none;">
     <h2>ПОБЕДА! ПЛАН ВЫПОЛНЕН!</h2>
-    <p>100 объектов успешно ликвидированы с рабочего места.</p>
+    <p>100 объектов успешно ликвидированы.</p>
     <button class="btn-action" id="btnRestart">ЕЩЁ СМЕНУ</button>
   </div>
 
@@ -99,11 +99,11 @@
     const screenWin = document.getElementById('screenWin');
     const btnRestart = document.getElementById('btnRestart');
 
-    // Настройка целевого объекта (можешь сам поменять эмодзи/символ здесь)
+    // Настройка целевого объекта
     const TARGET_CONFIG = {
-      displayChar: '🍌', // Замени на нужный символ или эмодзи
-      size: 32,
-      hitRadius: 28
+      displayChar: '🍌', // Замени на нужный эмодзи
+      size: 34,
+      hitRadius: 36
     };
 
     function resize() {
@@ -118,15 +118,19 @@
     const MAX_TARGETS = 5;
     const WIN_SCORE = 100;
 
-    // Игрок
+    // Человечек-игрок
     const player = {
       x: canvas.width / 2,
       y: canvas.height / 2,
-      radius: 16,
-      speed: 5.5,
+      radius: 18,
+      speed: 4.8,
       angle: 0,
+      walkFrame: 0,
+      isMoving: false,
+      // Состояние удара ногой
       kicking: false,
-      kickProgress: 0
+      kickPhase: 0,
+      kickTargetIndex: -1
     };
 
     const targets = [];
@@ -151,34 +155,29 @@
     });
     window.addEventListener('pointerup', () => pointer.active = false);
 
-    // Спавн объектов
     function spawnTarget() {
-      const margin = 50;
+      const margin = 60;
       targets.push({
         x: margin + Math.random() * (canvas.width - margin * 2),
-        y: margin + Math.random() * (canvas.height - margin * 2),
-        size: TARGET_CONFIG.size
+        y: margin + Math.random() * (canvas.height - margin * 2)
       });
     }
 
-    // Инициализация пула из 5 объектов
-    while (targets.length < MAX_TARGETS) {
-      spawnTarget();
-    }
+    while (targets.length < MAX_TARGETS) spawnTarget();
 
-    // Эффект разлёта при ударе
-    function shatterObject(x, y) {
-      for (let i = 0; i < 18; i++) {
+    // Компактный аккуратный разлёт осколков прямо на месте
+    function shatterCompact(x, y) {
+      for (let i = 0; i < 9; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const spd = 3 + Math.random() * 6;
+        const spd = 1.0 + Math.random() * 1.8; // Очень маленькая скорость
         particles.push({
           x: x,
           y: y,
           vx: Math.cos(angle) * spd,
           vy: Math.sin(angle) * spd,
-          size: 3 + Math.random() * 4,
-          life: 25,
-          color: Math.random() > 0.5 ? '#ffbe0b' : '#ff1e42'
+          size: 2 + Math.random() * 2.5,
+          life: 14, // Быстро растворяются
+          color: Math.random() > 0.4 ? '#ff1e42' : '#ffffff'
         });
       }
     }
@@ -186,73 +185,84 @@
     function update() {
       if (!isRunning) return;
 
-      // Движение клавиатурой
       let dx = 0;
       let dy = 0;
-      if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
-      if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
-      if (keys['KeyW'] || keys['ArrowUp']) dy -= 1;
-      if (keys['KeyS'] || keys['ArrowDown']) dy += 1;
 
-      // Движение к указателю
-      if (pointer.active) {
-        const pdx = pointer.x - player.x;
-        const pdy = pointer.y - player.y;
-        const dist = Math.hypot(pdx, pdy);
-        if (dist > 10) {
-          dx = pdx / dist;
-          dy = pdy / dist;
-        }
-      }
+      // Если сейчас идет фаза удара — игрок кратковременно замирает для акцента
+      if (!player.kicking) {
+        if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
+        if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+        if (keys['KeyW'] || keys['ArrowUp']) dy -= 1;
+        if (keys['KeyS'] || keys['ArrowDown']) dy += 1;
 
-      // Нормализация вектора движения
-      if (dx !== 0 || dy !== 0) {
-        const len = Math.hypot(dx, dy);
-        player.x += (dx / len) * player.speed;
-        player.y += (dy / len) * player.speed;
-        player.angle = Math.atan2(dy, dx);
-      }
-
-      // Ограничение границами экрана
-      player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
-      player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
-
-      // Анимация удара ногой
-      if (player.kicking) {
-        player.kickProgress += 0.25;
-        if (player.kickProgress >= Math.PI) {
-          player.kicking = false;
-          player.kickProgress = 0;
-        }
-      }
-
-      // Проверка дистанции до объектов
-      for (let i = targets.length - 1; i >= 0; i--) {
-        const t = targets[i];
-        const dist = Math.hypot(t.x - player.x, t.y - player.y);
-
-        if (dist < player.radius + TARGET_CONFIG.hitRadius) {
-          // Инициируем пинок
-          player.kicking = true;
-          player.kickProgress = 0;
-          player.angle = Math.atan2(t.y - player.y, t.x - player.x);
-
-          shatterObject(t.x, t.y);
-          targets.splice(i, 1);
-          score++;
-          valScore.textContent = score;
-
-          if (score >= WIN_SCORE) {
-            winGame();
-            return;
+        if (pointer.active) {
+          const pdx = pointer.x - player.x;
+          const pdy = pointer.y - player.y;
+          const dist = Math.hypot(pdx, pdy);
+          if (dist > 12) {
+            dx = pdx / dist;
+            dy = pdy / dist;
           }
+        }
 
-          // Мгновенный спавн нового взамен уничтоженного
-          spawnTarget();
+        if (dx !== 0 || dy !== 0) {
+          const len = Math.hypot(dx, dy);
+          player.x += (dx / len) * player.speed;
+          player.y += (dy / len) * player.speed;
+          player.angle = Math.atan2(dy, dx);
+          player.walkFrame += 0.2;
+          player.isMoving = true;
+        } else {
+          player.isMoving = false;
+        }
+
+        player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+        player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
+        // Поиск цели для пинка
+        for (let i = 0; i < targets.length; i++) {
+          const t = targets[i];
+          const dist = Math.hypot(t.x - player.x, t.y - player.y);
+
+          if (dist < player.radius + TARGET_CONFIG.hitRadius) {
+            // Начинаем анимацию пинка
+            player.kicking = true;
+            player.kickPhase = 0;
+            player.kickTargetIndex = i;
+            player.angle = Math.atan2(t.y - player.y, t.x - player.x);
+            break;
+          }
+        }
+      } else {
+        // Процесс пинка ногой
+        player.kickPhase += 0.22;
+
+        // В кульминации удара объект разлетается
+        if (player.kickPhase >= 1.0 && player.kickTargetIndex !== -1) {
+          const t = targets[player.kickTargetIndex];
+          if (t) {
+            shatterCompact(t.x, t.y);
+            targets.splice(player.kickTargetIndex, 1);
+            score++;
+            valScore.textContent = score;
+
+            if (score >= WIN_SCORE) {
+              winGame();
+              return;
+            }
+            spawnTarget();
+          }
+          player.kickTargetIndex = -1;
+        }
+
+        // Завершение анимации ноги
+        if (player.kickPhase >= Math.PI) {
+          player.kicking = false;
+          player.kickPhase = 0;
         }
       }
 
-      // Обновление частиц
+      // Частицы
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx;
@@ -262,27 +272,93 @@
       }
     }
 
+    // Отрисовка детализированного человечка с ногами и руками
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.angle);
+
+      const walk = player.isMoving ? Math.sin(player.walkFrame) * 6 : 0;
+
+      // Вынос ноги вперед при пинке
+      let kickOffset = 0;
+      if (player.kicking) {
+        kickOffset = Math.sin(player.kickPhase) * 28; // Нога вытягивается далеко вперед
+      }
+
+      // 1. Ноги (ботинки)
+      ctx.fillStyle = '#ff1e42';
+      // Правая (бьющая) нога
+      ctx.beginPath();
+      ctx.ellipse(8 + kickOffset, 10 + (player.kicking ? 0 : walk), 7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Левая (опорная) нога
+      ctx.fillStyle = '#b3102c';
+      ctx.beginPath();
+      ctx.ellipse(8, -10 - walk, 7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Руки с кулаками
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(10, 16 + (player.kicking ? 8 : -walk), 4, 0, Math.PI * 2);
+      ctx.arc(10, -16 + (player.kicking ? -4 : walk), 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Плечи и тело (одежда)
+      ctx.fillStyle = '#1e2230';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 14, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Воротник / куртка
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-6, -4, 8, 8);
+
+      // 4. Голова
+      ctx.fillStyle = '#f7c59f';
+      ctx.beginPath();
+      ctx.arc(2, 0, 9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Волосы
+      ctx.fillStyle = '#141419';
+      ctx.beginPath();
+      ctx.arc(-2, 0, 9, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.fill();
+
+      // Глаза (смотрят в сторону удара)
+      ctx.fillStyle = '#0a0b10';
+      ctx.beginPath();
+      ctx.arc(7, -3, 2, 0, Math.PI * 2);
+      ctx.arc(7, 3, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Фоновая разметка арены
+      // Сетка пола
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
       ctx.lineWidth = 1;
-      const gridSize = 40;
-      for (let x = 0; x < canvas.width; x += gridSize) {
+      const gSize = 40;
+      for (let x = 0; x < canvas.width; x += gSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, canvas.height);
         ctx.stroke();
       }
-      for (let y = 0; y < canvas.height; y += gridSize) {
+      for (let y = 0; y < canvas.height; y += gSize) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
         ctx.stroke();
       }
 
-      // Отрисовка целей
+      // Цели
       ctx.font = `${TARGET_CONFIG.size}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -290,7 +366,7 @@
         ctx.fillText(TARGET_CONFIG.displayChar, t.x, t.y);
       });
 
-      // Частицы
+      // Компактные частицы
       particles.forEach(p => {
         ctx.fillStyle = p.color;
         ctx.beginPath();
@@ -298,38 +374,8 @@
         ctx.fill();
       });
 
-      // Отрисовка игрока
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      ctx.rotate(player.angle);
-
-      // Анимация выноса ноги при ударе
-      const kickDist = player.kicking ? Math.sin(player.kickProgress) * 22 : 0;
-      ctx.fillStyle = '#ff1e42';
-      ctx.beginPath();
-      ctx.arc(14 + kickDist, 8, 6, 0, Math.PI * 2); // Бьющая правая нога
-      ctx.fill();
-
-      // Левая нога
-      ctx.fillStyle = '#b3102c';
-      ctx.beginPath();
-      ctx.arc(-4, -8, 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Тело игрока
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Глаза/направление
-      ctx.fillStyle = '#0a0b10';
-      ctx.beginPath();
-      ctx.arc(8, -4, 3, 0, Math.PI * 2);
-      ctx.arc(8, 4, 3, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
+      // Игрок
+      drawPlayer();
     }
 
     function loop() {

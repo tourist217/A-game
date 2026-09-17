@@ -1,1 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Kick Arena</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #0a0b10;
+      color: #ffffff;
+      font-family: 'Consolas', monospace;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.1rem;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .score-box { color: #00f3ff; text-shadow: 0 0 10px rgba(0, 243, 255, 0.7); }
+    .goal-box { color: #ffbe0b; text-shadow: 0 0 10px rgba(255, 190, 11, 0.5); }
 
+    canvas {
+      display: block;
+      background: #10121a;
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 7, 9, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 20;
+    }
+    .overlay h2 {
+      font-size: 2.2rem;
+      color: #00f3ff;
+      text-shadow: 0 0 15px rgba(0, 243, 255, 0.8);
+    }
+    .btn-action {
+      background: transparent;
+      color: #ffffff;
+      border: 1px solid #00f3ff;
+      padding: 10px 24px;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(0, 243, 255, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: #00f3ff;
+      color: #050608;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="score-box">ПНУТО: <span id="valScore">0</span></div>
+    <div class="goal-box">ЦЕЛЬ: 100</div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="overlay" id="screenWin" style="display: none;">
+    <h2>ПОБЕДА! ПЛАН ВЫПОЛНЕН!</h2>
+    <p>100 объектов успешно ликвидированы с рабочего места.</p>
+    <button class="btn-action" id="btnRestart">ЕЩЁ СМЕНУ</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const valScore = document.getElementById('valScore');
+    const screenWin = document.getElementById('screenWin');
+    const btnRestart = document.getElementById('btnRestart');
+
+    // Настройка целевого объекта (можешь сам поменять эмодзи/символ здесь)
+    const TARGET_CONFIG = {
+      displayChar: '🍌', // Замени на нужный символ или эмодзи
+      size: 32,
+      hitRadius: 28
+    };
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let score = 0;
+    let isRunning = true;
+    const MAX_TARGETS = 5;
+    const WIN_SCORE = 100;
+
+    // Игрок
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 16,
+      speed: 5.5,
+      angle: 0,
+      kicking: false,
+      kickProgress: 0
+    };
+
+    const targets = [];
+    const particles = [];
+
+    // Управление
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    let pointer = { x: player.x, y: player.y, active: false };
+    window.addEventListener('pointerdown', e => {
+      pointer.active = true;
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+    });
+    window.addEventListener('pointermove', e => {
+      if (pointer.active) {
+        pointer.x = e.clientX;
+        pointer.y = e.clientY;
+      }
+    });
+    window.addEventListener('pointerup', () => pointer.active = false);
+
+    // Спавн объектов
+    function spawnTarget() {
+      const margin = 50;
+      targets.push({
+        x: margin + Math.random() * (canvas.width - margin * 2),
+        y: margin + Math.random() * (canvas.height - margin * 2),
+        size: TARGET_CONFIG.size
+      });
+    }
+
+    // Инициализация пула из 5 объектов
+    while (targets.length < MAX_TARGETS) {
+      spawnTarget();
+    }
+
+    // Эффект разлёта при ударе
+    function shatterObject(x, y) {
+      for (let i = 0; i < 18; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = 3 + Math.random() * 6;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd,
+          size: 3 + Math.random() * 4,
+          life: 25,
+          color: Math.random() > 0.5 ? '#ffbe0b' : '#ff1e42'
+        });
+      }
+    }
+
+    function update() {
+      if (!isRunning) return;
+
+      // Движение клавиатурой
+      let dx = 0;
+      let dy = 0;
+      if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+      if (keys['KeyW'] || keys['ArrowUp']) dy -= 1;
+      if (keys['KeyS'] || keys['ArrowDown']) dy += 1;
+
+      // Движение к указателю
+      if (pointer.active) {
+        const pdx = pointer.x - player.x;
+        const pdy = pointer.y - player.y;
+        const dist = Math.hypot(pdx, pdy);
+        if (dist > 10) {
+          dx = pdx / dist;
+          dy = pdy / dist;
+        }
+      }
+
+      // Нормализация вектора движения
+      if (dx !== 0 || dy !== 0) {
+        const len = Math.hypot(dx, dy);
+        player.x += (dx / len) * player.speed;
+        player.y += (dy / len) * player.speed;
+        player.angle = Math.atan2(dy, dx);
+      }
+
+      // Ограничение границами экрана
+      player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+      player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
+      // Анимация удара ногой
+      if (player.kicking) {
+        player.kickProgress += 0.25;
+        if (player.kickProgress >= Math.PI) {
+          player.kicking = false;
+          player.kickProgress = 0;
+        }
+      }
+
+      // Проверка дистанции до объектов
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        const dist = Math.hypot(t.x - player.x, t.y - player.y);
+
+        if (dist < player.radius + TARGET_CONFIG.hitRadius) {
+          // Инициируем пинок
+          player.kicking = true;
+          player.kickProgress = 0;
+          player.angle = Math.atan2(t.y - player.y, t.x - player.x);
+
+          shatterObject(t.x, t.y);
+          targets.splice(i, 1);
+          score++;
+          valScore.textContent = score;
+
+          if (score >= WIN_SCORE) {
+            winGame();
+            return;
+          }
+
+          // Мгновенный спавн нового взамен уничтоженного
+          spawnTarget();
+        }
+      }
+
+      // Обновление частиц
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Фоновая разметка арены
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+      const gridSize = 40;
+      for (let x = 0; x < canvas.width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Отрисовка целей
+      ctx.font = `${TARGET_CONFIG.size}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      targets.forEach(t => {
+        ctx.fillText(TARGET_CONFIG.displayChar, t.x, t.y);
+      });
+
+      // Частицы
+      particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Отрисовка игрока
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.angle);
+
+      // Анимация выноса ноги при ударе
+      const kickDist = player.kicking ? Math.sin(player.kickProgress) * 22 : 0;
+      ctx.fillStyle = '#ff1e42';
+      ctx.beginPath();
+      ctx.arc(14 + kickDist, 8, 6, 0, Math.PI * 2); // Бьющая правая нога
+      ctx.fill();
+
+      // Левая нога
+      ctx.fillStyle = '#b3102c';
+      ctx.beginPath();
+      ctx.arc(-4, -8, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Тело игрока
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Глаза/направление
+      ctx.fillStyle = '#0a0b10';
+      ctx.beginPath();
+      ctx.arc(8, -4, 3, 0, Math.PI * 2);
+      ctx.arc(8, 4, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (isRunning) requestAnimationFrame(loop);
+    }
+
+    function winGame() {
+      isRunning = false;
+      screenWin.style.display = 'flex';
+    }
+
+    function restart() {
+      score = 0;
+      targets.length = 0;
+      particles.length = 0;
+      while (targets.length < MAX_TARGETS) spawnTarget();
+      valScore.textContent = '0';
+      screenWin.style.display = 'none';
+      isRunning = true;
+      loop();
+    }
+
+    btnRestart.addEventListener('click', restart);
+    loop();
+  </script>
+</body>
+</html>

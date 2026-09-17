@@ -66,7 +66,9 @@ function openGame(game) {
 
   if (game.path) {
     const iframe = document.createElement('iframe');
-    iframe.src = game.path;
+    // Добавляем штамп времени к пути (Date.now()), чтобы браузер никогда не кэшировал игру
+    const cacheBuster = `?t=${Date.now()}`;
+    iframe.src = game.path + cacheBuster;
     iframe.style.width = '100%';
     iframe.style.height = '100%';
     iframe.style.border = 'none';

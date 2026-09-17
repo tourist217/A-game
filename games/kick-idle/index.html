@@ -361,12 +361,17 @@
         ctx.stroke();
       }
 
-      // Цели
-      ctx.font = `${TARGET_CONFIG.size}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      // Цели (отрисовка загруженного PNG)
       targets.forEach(t => {
-        ctx.fillText(TARGET_CONFIG.displayChar, t.x, t.y);
+        if (targetImg.complete && targetImg.naturalWidth !== 0) {
+          ctx.drawImage(
+            targetImg,
+            t.x - TARGET_CONFIG.width / 2,
+            t.y - TARGET_CONFIG.height / 2,
+            TARGET_CONFIG.width,
+            TARGET_CONFIG.height
+          );
+        }
       });
 
       // Компактные частицы

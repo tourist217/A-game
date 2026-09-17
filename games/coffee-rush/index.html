@@ -1,1 +1,327 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cyber Racer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #08090d;
+      color: #ffffff;
+      font-family: 'Consolas', monospace;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.1rem;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .score-box { color: #00f3ff; text-shadow: 0 0 10px rgba(0, 243, 255, 0.7); }
+    .lives-box { color: #ff1e42; text-shadow: 0 0 10px rgba(255, 30, 66, 0.7); }
 
+    canvas {
+      display: block;
+      background: #11131a;
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 7, 9, 0.88);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 20;
+    }
+    .overlay h2 {
+      font-size: 2.2rem;
+      color: #ff1e42;
+      text-shadow: 0 0 15px rgba(255, 30, 66, 0.8);
+    }
+    .overlay p { color: #8e95a5; font-size: 0.95rem; }
+    .btn-action {
+      background: transparent;
+      color: #ffffff;
+      border: 1px solid #ff1e42;
+      padding: 10px 24px;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(255, 30, 66, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: #ff1e42;
+      box-shadow: 0 0 20px rgba(255, 30, 66, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="score-box">ОЧКИ: <span id="valScore">0</span></div>
+    <div class="lives-box">ЖИЗНИ: <span id="valLives">❤❤❤</span></div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="overlay" id="screenGameOver" style="display: none;">
+    <h2>АВАРИЯ!</h2>
+    <p>Сбиты запрещенные цели. Машина разбита.</p>
+    <p style="color: #00f3ff;">Финальный счет: <span id="valFinalScore">0</span></p>
+    <button class="btn-action" id="btnRestart">ВЫЕХАТЬ СНОВА</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const valScore = document.getElementById('valScore');
+    const valLives = document.getElementById('valLives');
+    const screenGameOver = document.getElementById('screenGameOver');
+    const valFinalScore = document.getElementById('valFinalScore');
+    const btnRestart = document.getElementById('btnRestart');
+
+    function resize() {
+      canvas.width = Math.min(window.innerWidth, 500);
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Параметры игры
+    let score = 0;
+    let lives = 3;
+    let isRunning = true;
+    let baseSpeed = 4;
+    let roadOffset = 0;
+    let spawnCounter = 0;
+
+    // Игрок (машина)
+    const car = {
+      w: 42,
+      h: 75,
+      x: canvas.width / 2 - 21,
+      y: canvas.height - 110,
+      vx: 0,
+      vy: 0,
+      speed: 7
+    };
+
+    // Массив препятствий (человечков)
+    const pedestrians = [];
+
+    // Управление
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    // Управление мышью / пальцем
+    let isPointerDown = false;
+    window.addEventListener('pointerdown', e => {
+      isPointerDown = true;
+      moveCarToPointer(e);
+    });
+    window.addEventListener('pointermove', e => {
+      if (isPointerDown) moveCarToPointer(e);
+    });
+    window.addEventListener('pointerup', () => isPointerDown = false);
+
+    function moveCarToPointer(e) {
+      const rect = canvas.getBoundingClientRect();
+      const targetX = e.clientX - rect.left - car.w / 2;
+      car.x += (targetX - car.x) * 0.2;
+    }
+
+    function spawnPedestrian() {
+      const isTarget = Math.random() > 0.45; // Синий (цель) или Красный (штраф)
+      pedestrians.push({
+        x: 30 + Math.random() * (canvas.width - 60 - 30),
+        y: -50,
+        size: 26,
+        isTarget: isTarget // true = Синий, false = Красный
+      });
+    }
+
+    function update() {
+      if (!isRunning) return;
+
+      // Увеличение скорости каждые 10 очков
+      const currentSpeed = baseSpeed + Math.floor(score / 10) * 0.7;
+
+      // Скролл разметки дороги
+      roadOffset = (roadOffset + currentSpeed) % 40;
+
+      // Движение клавиатурой (WASD / стрелки)
+      if (keys['KeyA'] || keys['ArrowLeft']) car.x -= car.speed;
+      if (keys['KeyD'] || keys['ArrowRight']) car.x += car.speed;
+      if (keys['KeyW'] || keys['ArrowUp']) car.y -= car.speed * 0.6;
+      if (keys['KeyS'] || keys['ArrowDown']) car.y += car.speed * 0.6;
+
+      // Ограничения границ дороги
+      car.x = Math.max(15, Math.min(canvas.width - car.w - 15, car.x));
+      car.y = Math.max(60, Math.min(canvas.height - car.h - 20, car.y));
+
+      // Спавн
+      spawnCounter++;
+      const spawnRate = Math.max(28, 65 - Math.floor(score / 10) * 4);
+      if (spawnCounter > spawnRate) {
+        spawnPedestrian();
+        spawnCounter = 0;
+      }
+
+      // Обновление пешеходов
+      for (let i = pedestrians.length - 1; i >= 0; i--) {
+        const p = pedestrians[i];
+        p.y += currentSpeed;
+
+        // Коллизия с машиной
+        if (
+          car.x < p.x + p.size &&
+          car.x + car.w > p.x &&
+          car.y < p.y + p.size &&
+          car.y + car.h > p.y
+        ) {
+          if (p.isTarget) {
+            // Синий - сбиваем, даем очки!
+            score += 10;
+            valScore.textContent = score;
+          } else {
+            // Красный - штраф, минус жизнь!
+            lives--;
+            valLives.textContent = '❤'.repeat(Math.max(0, lives));
+            if (lives <= 0) {
+              gameOver();
+              return;
+            }
+          }
+          pedestrians.splice(i, 1);
+          continue;
+        }
+
+        // Выход за экран вниз
+        if (p.y > canvas.height + 50) {
+          pedestrians.splice(i, 1);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Трасса (обочины и полосы)
+      ctx.fillStyle = '#0f1118';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Обочины
+      ctx.fillStyle = '#ff1e42';
+      ctx.fillRect(0, 0, 8, canvas.height);
+      ctx.fillRect(canvas.width - 8, 0, 8, canvas.height);
+
+      // Прерывистая разметка
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([20, 20]);
+      ctx.lineDashOffset = -roadOffset;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.stroke();
+      ctx.setLineDash([]); // сброс
+
+      // 2. Пешеходы с буквами «А»
+      pedestrians.forEach(p => {
+        // Голова/Тело (подложка)
+        ctx.fillStyle = '#1c1f2b';
+        ctx.beginPath();
+        ctx.arc(p.x + p.size / 2, p.y + p.size / 2, p.size / 1.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Буква «А»
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ffffff'; // белая обводка
+        ctx.strokeText('A', p.x + p.size / 2, p.y + p.size / 2);
+
+        ctx.fillStyle = p.isTarget ? '#0066ff' : '#ff1e42'; // Синий или Красный
+        ctx.fillText('A', p.x + p.size / 2, p.y + p.size / 2);
+      });
+
+      // 3. Машинка игрока
+      // Корпус
+      ctx.fillStyle = '#ff1e42';
+      ctx.shadowColor = 'rgba(255, 30, 66, 0.7)';
+      ctx.shadowBlur = 12;
+      ctx.fillRect(car.x, car.y, car.w, car.h);
+      ctx.shadowBlur = 0;
+
+      // Лобовое стекло
+      ctx.fillStyle = '#00f3ff';
+      ctx.fillRect(car.x + 5, car.y + 16, car.w - 10, 14);
+
+      // Фары
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(car.x + 4, car.y + 2, 8, 4);
+      ctx.fillRect(car.x + car.w - 12, car.y + 2, 8, 4);
+
+      // Колеса
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(car.x - 3, car.y + 10, 4, 14);
+      ctx.fillRect(car.x + car.w - 1, car.y + 10, 4, 14);
+      ctx.fillRect(car.x - 3, car.y + car.h - 22, 4, 14);
+      ctx.fillRect(car.x + car.w - 1, car.y + car.h - 22, 4, 14);
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (isRunning) requestAnimationFrame(loop);
+    }
+
+    function gameOver() {
+      isRunning = false;
+      valFinalScore.textContent = score;
+      screenGameOver.style.display = 'flex';
+    }
+
+    function restart() {
+      score = 0;
+      lives = 3;
+      pedestrians.length = 0;
+      car.x = canvas.width / 2 - car.w / 2;
+      car.y = canvas.height - 110;
+      valScore.textContent = '0';
+      valLives.textContent = '❤❤❤';
+      screenGameOver.style.display = 'none';
+      isRunning = true;
+      loop();
+    }
+
+    btnRestart.addEventListener('click', restart);
+    loop();
+  </script>
+</body>
+</html>

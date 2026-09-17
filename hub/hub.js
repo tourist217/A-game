@@ -10,12 +10,12 @@ const GAMES_CATALOG = [
   },
   {
     id: 'coffee-rush',
-    title: 'Coffee Machine Protocol',
-    desc: 'Напои команду кофе во время утреннего дейли, пока не сгорели дедлайны.',
-    icon: '☕',
-    tag: 'TIMING',
+    title: 'A-Racer: Синий таран',
+    desc: 'Жми на газ! Сбивай синие «А», уворачивайся от красных «А». Каждые 10 очков скорость растет.',
+    icon: '🏎️',
+    tag: 'RACING',
     path: 'games/coffee-rush/index.html',
-    controlsTip: 'Управление: Клик мышью / Пробел / Тап по кнопке'
+    controlsTip: 'Управление: [W][A][S][D] или Сенсор / Мышь'
   },
   {
     id: 'egg-splat',

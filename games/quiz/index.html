@@ -1,1 +1,530 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Кто хочет стать Альфа-Миллионером</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #07080c;
+      color: #ffffff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
 
+    /* Фоновый холст для салютов */
+    #fxCanvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Красная вспышка при ошибке */
+    #flashOverlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 30, 66, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .flash-active {
+      animation: screenBlink 0.7s ease-in-out;
+    }
+    @keyframes screenBlink {
+      0%, 100% { opacity: 0; }
+      20%, 60% { opacity: 0.9; }
+      40%, 80% { opacity: 0.1; }
+    }
+
+    .quiz-container {
+      position: relative;
+      z-index: 2;
+      width: 92%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Верхняя панель */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Consolas', monospace;
+      font-size: 0.95rem;
+      color: #00f3ff;
+      border-bottom: 1px solid rgba(0, 243, 255, 0.2);
+      padding-bottom: 8px;
+    }
+
+    /* Карточка вопроса */
+    .question-box {
+      background: #0f121d;
+      border: 2px solid #00f3ff;
+      border-radius: 8px;
+      padding: 22px 20px;
+      text-align: center;
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: #ffffff;
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.15);
+      line-height: 1.4;
+      min-height: 90px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Сетка ответов */
+    .answers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 550px) {
+      .answers-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .question-box {
+        font-size: 1.1rem;
+        padding: 16px;
+      }
+    }
+
+    .btn-ans {
+      background: #131724;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 14px 14px;
+      font-size: 0.95rem;
+      color: #e2e8f0;
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s;
+    }
+    .btn-ans:hover:not(:disabled) {
+      border-color: #ffd700;
+      background: #1a2033;
+      transform: translateY(-2px);
+      box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+    }
+    .ans-prefix {
+      color: #ffd700;
+      font-weight: bold;
+      font-family: 'Consolas', monospace;
+      font-size: 1.1rem;
+    }
+
+    /* Состояния подсветки ответов */
+    .btn-ans.correct {
+      background: #00d26a !important;
+      color: #041f0f !important;
+      border-color: #00ff84 !important;
+      font-weight: bold;
+      box-shadow: 0 0 24px rgba(0, 255, 132, 0.8) !important;
+    }
+    .btn-ans.correct .ans-prefix {
+      color: #041f0f !important;
+    }
+    .btn-ans.wrong {
+      background: #ff1e42 !important;
+      color: #ffffff !important;
+      border-color: #ff5270 !important;
+      font-weight: bold;
+      box-shadow: 0 0 24px rgba(255, 30, 66, 0.8) !important;
+    }
+    .btn-ans.wrong .ans-prefix {
+      color: #ffffff !important;
+    }
+
+    /* Модальная плашка с объяснением */
+    .explanation-panel {
+      display: none;
+      background: #141724;
+      border-left: 4px solid #00f3ff;
+      border-radius: 4px;
+      padding: 14px 16px;
+      animation: slideUp 0.3s ease-out forwards;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .exp-title {
+      font-size: 0.85rem;
+      color: #00f3ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .exp-text {
+      font-size: 0.95rem;
+      color: #d1d5db;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .btn-next {
+      background: #00f3ff;
+      color: #060911;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      font-family: inherit;
+      cursor: pointer;
+      display: block;
+      margin-left: auto;
+      transition: background 0.2s;
+    }
+    .btn-next:hover {
+      background: #5cf7ff;
+    }
+
+    /* Экран победы/финала */
+    .result-screen {
+      display: none;
+      background: #0f121d;
+      border: 2px solid #ffd700;
+      box-shadow: 0 0 35px rgba(255, 215, 0, 0.3);
+      border-radius: 10px;
+      padding: 30px 20px;
+      text-align: center;
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+    }
+    .res-title {
+      font-size: 2rem;
+      color: #ffd700;
+      text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+    }
+    .res-score {
+      font-size: 1.5rem;
+      font-family: 'Consolas', monospace;
+      color: #00f3ff;
+    }
+    .res-comment {
+      color: #a0aec0;
+      max-width: 480px;
+      line-height: 1.5;
+    }
+    .btn-restart {
+      background: transparent;
+      border: 2px solid #ffd700;
+      color: #ffd700;
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .btn-restart:hover {
+      background: #ffd700;
+      color: #0a0b10;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fxCanvas"></canvas>
+  <div id="flashOverlay"></div>
+
+  <main class="quiz-container">
+    <!-- Верхний статус -->
+    <div class="top-bar">
+      <div>ВОПРОС: <span id="qCurrent">1</span> / <span id="qTotal">11</span></div>
+      <div>СЧЁТ: <span id="valScore">0</span></div>
+    </div>
+
+    <!-- Основной блок вопроса -->
+    <section id="gameBlock" style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="question-box" id="questionText">Загрузка вопроса...</div>
+      
+      <div class="answers-grid" id="answersGrid">
+        <!-- 4 кнопки генерируются из JS -->
+      </div>
+
+      <div class="explanation-panel" id="explanationPanel">
+        <div class="exp-title">Официальное разъяснение:</div>
+        <div class="exp-text" id="explanationText"></div>
+        <button class="btn-next" id="btnNext">СЛЕДУЮЩИЙ ВОПРОС ▶</button>
+      </div>
+    </section>
+
+    <!-- Экран результатов -->
+    <section class="result-screen" id="resultScreen">
+      <h2 class="res-title">ВИКТОРИНА ПРОЙДЕНА!</h2>
+      <div class="res-score">Правильных ответов: <span id="finalScore">0</span> из 11</div>
+      <p class="res-comment" id="finalComment">...</p>
+      <button class="btn-restart" id="btnRestart">ПРОЙТИ ЕЩЁ РАЗ</button>
+    </section>
+  </main>
+
+  <script>
+    const QUESTIONS = [
+      {
+        q: "1. Сколько звонков в день может сделать сейлз?",
+        options: ["1200", "2675", "8762", "4"],
+        correct: 1, // 2675
+        exp: "Хороший сейлз должен успевать обзванивать 2675 клиентов за рабочий день."
+      },
+      {
+        q: "2. Сколько клиентов в портфеле может быть у CSM?",
+        options: ["340", "764", "7", "1782"],
+        correct: 3, // 1782
+        exp: "Успешный CSM должен поддерживать общение одновременно с 1782 клиентами, при этом отвечая на вопросы каждого из них ежедневно."
+      },
+      {
+        q: "3. Сколько чашек кофе может выпить Серёжа в день?",
+        options: ["0", "174", "12", "Серёжа пьёт зелёный чай"],
+        correct: 1, // 174
+        exp: "В день когда попа горит, Серёжа может выпить 174 чашки кофе в день."
+      },
+      {
+        q: "4. За какую сумму мы купили Адвант Шоп?",
+        options: ["150 рублей", "4 560 рублей", "7 000 000 рублей", "69 рублей"],
+        correct: 3, // 69 рублей
+        exp: "Никто не знает, но на самом деле мы купили Адвант Шоп за 69 рублей. Иначе непонятно, почему с ними так всё сложно."
+      },
+      {
+        q: "5. Сколько дней в неделю можно работать из дома?",
+        options: ["1", "0", "5", "12"],
+        correct: 2, // 5
+        exp: "5 дней в неделю, потому что работа — это второй дом."
+      },
+      {
+        q: "6. В каком году на 16 этаже появится кофе-машина?",
+        options: ["2026", "2027", "2048", "16 этажа не существует"],
+        correct: 3, // 16 этажа не существует
+        exp: "На самом деле 16 этажа не существует, и именно поэтому у нас ничего нет. А работаем мы в искривленном пространстве времени между 15 и 17 этажами."
+      },
+      {
+        q: "7. Как часто меняются новости о нашей дальнейшей судьбе в Альфа Банке?",
+        options: ["5 раз в месяц", "36 раз в день", "1900 раз в неделю", "не меняются"],
+        correct: 1, // 36 раз в день
+        exp: "Согласно проведённому исследованию, мы пришли к выводу, что новости о нашей судьбе в Альфа Банке меняются примерно 36 раз в день."
+      },
+      {
+        q: "8. Можно ли не приходить в офис, если твой начальник не пришёл в офис?",
+        options: ["да (нет)", "нет (да)", "да (нет\\да)", "нет (да\\нет)"],
+        correct: 3, // нет (да\нет)
+        exp: "Ответ: нет (да\\нет)."
+      },
+      {
+        q: "9. Какой психологический возраст Игоря?",
+        options: ["38 лет", "51 год", "187 лет", "кто такой Игорь?"],
+        correct: 3, // кто такой Игорь?
+        exp: "Никто не знает кто такой Игорь, обратитесь в поддержку."
+      },
+      {
+        q: "10. Какое секретное увлечение есть у Серёжи?",
+        options: ["душить утку", "ругать Игоря", "спорить с Продуктом", "тушить свечу рукой"],
+        correct: 2, // спорить с Продуктом
+        exp: "Конечно, все мы знаем, что Серёжа любит спорить с Продуктом."
+      },
+      {
+        q: "11. Какой ДРР Грибанов сделал для БайБьюти?",
+        options: ["кто такой Грибанов?", "точно больше 1000%", "как Грибанов связан с ДРР!?", "97%"],
+        correct: 3, // 97%
+        exp: "Если честно, то Серёжа молодец (почти) и сделал ДРР 97%!"
+      }
+    ];
+
+    let currentIndex = 0;
+    let score = 0;
+    let isAnswered = false;
+
+    // DOM
+    const qCurrent = document.getElementById('qCurrent');
+    const qTotal = document.getElementById('qTotal');
+    const valScore = document.getElementById('valScore');
+    const questionText = document.getElementById('questionText');
+    const answersGrid = document.getElementById('answersGrid');
+    const explanationPanel = document.getElementById('explanationPanel');
+    const explanationText = document.getElementById('explanationText');
+    const btnNext = document.getElementById('btnNext');
+    const gameBlock = document.getElementById('gameBlock');
+    const resultScreen = document.getElementById('resultScreen');
+    const finalScore = document.getElementById('finalScore');
+    const finalComment = document.getElementById('finalComment');
+    const btnRestart = document.getElementById('btnRestart');
+    const flashOverlay = document.getElementById('flashOverlay');
+
+    qTotal.textContent = QUESTIONS.length;
+
+    // Canvas для салюта
+    const canvas = document.getElementById('fxCanvas');
+    const ctx = canvas.getContext('2d');
+    let fireworks = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function launchFireworks() {
+      const colors = ['#00f3ff', '#ffd700', '#00ff84', '#ff1e42', '#ffffff'];
+      for (let f = 0; f < 4; f++) {
+        const cx = canvas.width * 0.2 + Math.random() * (canvas.width * 0.6);
+        const cy = canvas.height * 0.2 + Math.random() * (canvas.height * 0.4);
+        for (let i = 0; i < 35; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 2 + Math.random() * 6;
+          fireworks.push({
+            x: cx,
+            y: cy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            life: 40 + Math.random() * 20,
+            size: 2.5 + Math.random() * 2.5
+          });
+        }
+      }
+    }
+
+    function loopFx() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = fireworks.length - 1; i >= 0; i--) {
+        const p = fireworks[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.08; // Гравитация
+        p.life--;
+        if (p.life <= 0) {
+          fireworks.splice(i, 1);
+          continue;
+        }
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      requestAnimationFrame(loopFx);
+    }
+    loopFx();
+
+    function renderQuestion() {
+      isAnswered = false;
+      explanationPanel.style.display = 'none';
+      const item = QUESTIONS[currentIndex];
+
+      qCurrent.textContent = currentIndex + 1;
+      questionText.textContent = item.q;
+      answersGrid.innerHTML = '';
+
+      const letters = ['A', 'B', 'C', 'D'];
+      item.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-ans';
+        btn.innerHTML = `<span class="ans-prefix">${letters[idx]}:</span> ${opt}`;
+        btn.addEventListener('click', () => handleAnswer(idx, btn));
+        answersGrid.appendChild(btn);
+      });
+    }
+
+    function handleAnswer(chosenIdx, chosenBtn) {
+      if (isAnswered) return;
+      isAnswered = true;
+
+      const item = QUESTIONS[currentIndex];
+      const allButtons = answersGrid.querySelectorAll('.btn-ans');
+
+      // Блокируем дальнейшие клики
+      allButtons.forEach(b => b.disabled = true);
+
+      if (chosenIdx === item.correct) {
+        // ВЕРНЫЙ ОТВЕТ
+        score++;
+        valScore.textContent = score;
+        chosenBtn.classList.add('correct');
+        launchFireworks();
+      } else {
+        // ОШИБКА
+        chosenBtn.classList.add('wrong');
+        // Подсвечиваем правильный
+        allButtons[item.correct].classList.add('correct');
+        
+        // Мигание экрана красным
+        flashOverlay.classList.remove('flash-active');
+        void flashOverlay.offsetWidth; // сброс анимации
+        flashOverlay.classList.add('flash-active');
+      }
+
+      // Показываем карточку с объяснением
+      explanationText.textContent = item.exp;
+      explanationPanel.style.display = 'block';
+
+      if (currentIndex === QUESTIONS.length - 1) {
+        btnNext.textContent = 'УЗНАТЬ РЕЗУЛЬТАТЫ 🏆';
+      } else {
+        btnNext.textContent = 'СЛЕДУЮЩИЙ ВОПРОС ▶';
+      }
+    }
+
+    btnNext.addEventListener('click', () => {
+      currentIndex++;
+      if (currentIndex < QUESTIONS.length) {
+        renderQuestion();
+      } else {
+        showResults();
+      }
+    });
+
+    function showResults() {
+      gameBlock.style.display = 'none';
+      resultScreen.style.display = 'flex';
+      finalScore.textContent = score;
+
+      let comment = "";
+      if (score === 11) {
+        comment = "Абсолютный корпоративный гений! 16 этаж открыт специально для тебя, а Серёжа лично сделает тебе 97% ДРР.";
+        launchFireworks();
+      } else if (score >= 8) {
+        comment = "Отличный результат! Сразу видно бывалого бойца, знающего цену Адвант Шопа и психологический возраст сотрудников.";
+      } else if (score >= 4) {
+        comment = "Неплохо, но новости о судьбе в Альфа Банке явно прошли мимо тебя. Срочно перезвони 2675 клиентам!";
+      } else {
+        comment = "Похоже, ты работаешь в искривленном пространстве. Обратись в поддержку и узнай, кто такой Игорь.";
+      }
+      finalComment.textContent = comment;
+    }
+
+    function restart() {
+      currentIndex = 0;
+      score = 0;
+      valScore.textContent = '0';
+      resultScreen.style.display = 'none';
+      gameBlock.style.display = 'flex';
+      renderQuestion();
+    }
+
+    btnRestart.addEventListener('click', restart);
+
+    // Старт
+    renderQuestion();
+  </script>
+</body>
+</html>

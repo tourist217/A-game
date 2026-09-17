@@ -1,1 +1,430 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Купить АдвантШоп</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #08090d;
+      color: #ffffff;
+      font-family: 'Consolas', monospace;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.15rem;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .balance-box { 
+      color: #ffd700; 
+      text-shadow: 0 0 12px rgba(255, 215, 0, 0.7); 
+    }
+    .goal-box { 
+      color: #00f3ff; 
+      text-shadow: 0 0 10px rgba(0, 243, 255, 0.6); 
+    }
 
+    canvas {
+      display: block;
+      background: #0e1017;
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 7, 9, 0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 20;
+      text-align: center;
+      padding: 20px;
+    }
+    .overlay h2 {
+      font-size: 2rem;
+      color: #ffd700;
+      text-shadow: 0 0 18px rgba(255, 215, 0, 0.8);
+      max-width: 600px;
+      line-height: 1.3;
+    }
+    .overlay p {
+      color: #8e95a5;
+      font-size: 1rem;
+    }
+    .btn-action {
+      background: transparent;
+      color: #ffd700;
+      border: 1px solid #ffd700;
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 0 14px rgba(255, 215, 0, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: #ffd700;
+      color: #050608;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="balance-box">БАЛАНС: <span id="valBalance">0</span> ₽</div>
+    <div class="goal-box">ЦЕНА АДВАНТШОП: 69 ₽</div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="overlay" id="screenWin" style="display: none;">
+    <h2>Поздравляем!<br>Теперь вы можете купить АдвантШоп</h2>
+    <p>Сделка года успешно закрыта за 69 рублей.</p>
+    <button class="btn-action" id="btnRestart">КУПИТЬ ЕЩЁ РАЗ</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const valBalance = document.getElementById('valBalance');
+    const screenWin = document.getElementById('screenWin');
+    const btnRestart = document.getElementById('btnRestart');
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let balance = 0;
+    let isRunning = true;
+    const TARGET_SUM = 69;
+    const MAX_COINS = 8;
+
+    // Персонаж
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 18,
+      speed: 5.2,
+      angle: 0,
+      walkFrame: 0,
+      isMoving: false
+    };
+
+    const coins = [];
+    const floatingTexts = [];
+    const particles = [];
+
+    // Управление
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    let pointer = { x: player.x, y: player.y, active: false };
+    window.addEventListener('pointerdown', e => {
+      pointer.active = true;
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+    });
+    window.addEventListener('pointermove', e => {
+      if (pointer.active) {
+        pointer.x = e.clientX;
+        pointer.y = e.clientY;
+      }
+    });
+    window.addEventListener('pointerup', () => pointer.active = false);
+
+    // Номиналы монет: 1, 2, 5 рублей
+    const DENOMINATIONS = [1, 1, 1, 2, 2, 5];
+
+    function spawnCoin() {
+      const margin = 50;
+      const val = DENOMINATIONS[Math.floor(Math.random() * DENOMINATIONS.length)];
+      coins.push({
+        x: margin + Math.random() * (canvas.width - margin * 2),
+        y: margin + Math.random() * (canvas.height - margin * 2),
+        value: val,
+        radius: val === 5 ? 17 : (val === 2 ? 15 : 13),
+        animOffset: Math.random() * Math.PI * 2
+      });
+    }
+
+    while (coins.length < MAX_COINS) spawnCoin();
+
+    function collectCoin(coin) {
+      balance += coin.value;
+      valBalance.textContent = balance;
+
+      // Всплывающий текст с номиналом
+      floatingTexts.push({
+        text: `+${coin.value} ₽`,
+        x: coin.x,
+        y: coin.y,
+        life: 30,
+        opacity: 1
+      });
+
+      // Золотистые блестки
+      for (let i = 0; i < 8; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = 1.5 + Math.random() * 2.5;
+        particles.push({
+          x: coin.x,
+          y: coin.y,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd,
+          size: 2 + Math.random() * 2.5,
+          life: 18,
+          color: '#ffd700'
+        });
+      }
+
+      if (balance >= TARGET_SUM) {
+        winGame();
+      }
+    }
+
+    function update() {
+      if (!isRunning) return;
+
+      let dx = 0;
+      let dy = 0;
+
+      if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+      if (keys['KeyW'] || keys['ArrowUp']) dy -= 1;
+      if (keys['KeyS'] || keys['ArrowDown']) dy += 1;
+
+      if (pointer.active) {
+        const pdx = pointer.x - player.x;
+        const pdy = pointer.y - player.y;
+        const dist = Math.hypot(pdx, pdy);
+        if (dist > 12) {
+          dx = pdx / dist;
+          dy = pdy / dist;
+        }
+      }
+
+      if (dx !== 0 || dy !== 0) {
+        const len = Math.hypot(dx, dy);
+        player.x += (dx / len) * player.speed;
+        player.y += (dy / len) * player.speed;
+        player.angle = Math.atan2(dy, dx);
+        player.walkFrame += 0.22;
+        player.isMoving = true;
+      } else {
+        player.isMoving = false;
+      }
+
+      player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+      player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
+      // Проверка подбора монет
+      for (let i = coins.length - 1; i >= 0; i--) {
+        const c = coins[i];
+        const dist = Math.hypot(c.x - player.x, c.y - player.y);
+        if (dist < player.radius + c.radius) {
+          collectCoin(c);
+          coins.splice(i, 1);
+          spawnCoin();
+        }
+      }
+
+      // Всплывающий текст
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.y -= 1.2;
+        ft.life--;
+        ft.opacity = ft.life / 30;
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+      }
+
+      // Частицы
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    // Отрисовка монеты
+    function drawCoin(c) {
+      ctx.save();
+      ctx.translate(c.x, c.y);
+
+      // Внешний золотой ободок
+      ctx.fillStyle = '#c99700';
+      ctx.beginPath();
+      ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Внутренний золотой круг
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath();
+      ctx.arc(0, 0, c.radius - 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Текст номинала и символ ₽
+      ctx.fillStyle = '#4a3800';
+      ctx.font = `bold ${Math.round(c.radius * 1.1)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${c.value}₽`, 0, 1);
+
+      ctx.restore();
+    }
+
+    // Отрисовка персонажа
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.angle);
+
+      const walk = player.isMoving ? Math.sin(player.walkFrame) * 6 : 0;
+
+      // Ноги
+      ctx.fillStyle = '#00f3ff';
+      ctx.beginPath();
+      ctx.ellipse(8, 10 + walk, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(8, -10 - walk, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Руки
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(10, 15 - walk, 4, 0, Math.PI * 2);
+      ctx.arc(10, -15 + walk, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Тело
+      ctx.fillStyle = '#1c202d';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 14, 17, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Белая рубашка
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-6, -4, 8, 8);
+
+      // Голова
+      ctx.fillStyle = '#f7c59f';
+      ctx.beginPath();
+      ctx.arc(2, 0, 9, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Волосы
+      ctx.fillStyle = '#141419';
+      ctx.beginPath();
+      ctx.arc(-2, 0, 9, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.fill();
+
+      // Глаза
+      ctx.fillStyle = '#0a0b10';
+      ctx.beginPath();
+      ctx.arc(7, -3, 2, 0, Math.PI * 2);
+      ctx.arc(7, 3, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Плиточный пол офиса
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+      ctx.lineWidth = 1;
+      const gSize = 44;
+      for (let x = 0; x < canvas.width; x += gSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Монеты
+      coins.forEach(c => drawCoin(c));
+
+      // Частицы
+      particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Игрок
+      drawPlayer();
+
+      // Всплывающие суммы
+      floatingTexts.forEach(ft => {
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillStyle = `rgba(255, 215, 0, ${ft.opacity})`;
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x, ft.y);
+      });
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (isRunning) requestAnimationFrame(loop);
+    }
+
+    function winGame() {
+      isRunning = false;
+      screenWin.style.display = 'flex';
+    }
+
+    function restart() {
+      balance = 0;
+      coins.length = 0;
+      particles.length = 0;
+      floatingTexts.length = 0;
+      while (coins.length < MAX_COINS) spawnCoin();
+      valBalance.textContent = '0';
+      screenWin.style.display = 'none';
+      isRunning = true;
+      loop();
+    }
+
+    btnRestart.addEventListener('click', restart);
+    loop();
+  </script>
+</body>
+</html>

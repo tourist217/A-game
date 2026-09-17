@@ -14,8 +14,17 @@ const GAMES_CATALOG = [
     desc: 'Напои команду кофе во время утреннего дейли, пока не сгорели дедлайны.',
     icon: '☕',
     tag: 'TIMING',
-    path: '',
-    controlsTip: 'Управление: Клик мышью / Тап по чашке'
+    path: 'games/coffee-rush/index.html',
+    controlsTip: 'Управление: Клик мышью / Пробел / Тап по кнопке'
+  },
+  {
+    id: 'egg-splat',
+    title: 'Обучение по Адвант шоп',
+    desc: 'Тотальный командный антистресс. Закидай стену яйцами и смой следы шваброй.',
+    icon: '🥚',
+    tag: 'ANTISTRESS',
+    path: 'games/egg-splat/index.html',
+    controlsTip: 'Управление: Клик / Тап по стене чтобы бросить яйцо'
   }
 ];
 
@@ -56,7 +65,6 @@ function openGame(game) {
   gameViewport.innerHTML = '';
 
   if (game.path) {
-    // Встраиваем игру изолированно через iframe
     const iframe = document.createElement('iframe');
     iframe.src = game.path;
     iframe.style.width = '100%';
@@ -67,7 +75,7 @@ function openGame(game) {
     gameViewport.innerHTML = `
       <div style="text-align: center; font-family: monospace;">
         <h3 style="color: #ff1e42; margin-bottom: 8px;">[ ${game.title} ]</h3>
-        <p style="color: #00f3ff;">Прототип в разработке. Скоро запустим!</p>
+        <p style="color: #00f3ff;">Прототип в разработке.</p>
       </div>
     `;
   }
@@ -79,7 +87,6 @@ function openGame(game) {
 function closeGame() {
   gameModal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
-  // Очищаем вьюпорт, чтобы фоновый процесс и звук игры мгновенно выгрузились из памяти
   gameViewport.innerHTML = '';
 }
 

@@ -1,1 +1,330 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Защита АльфаСеллер</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background: #08090d;
+      color: #ffffff;
+      font-family: 'Consolas', monospace;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.15rem;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .score-box { color: #00f3ff; text-shadow: 0 0 10px rgba(0, 243, 255, 0.7); }
+    .lives-box { color: #ff1e42; text-shadow: 0 0 10px rgba(255, 30, 66, 0.7); }
 
+    canvas {
+      display: block;
+      background: #0e1017;
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 7, 9, 0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 20;
+      text-align: center;
+    }
+    .overlay h2 {
+      font-size: 2.2rem;
+      color: #ff1e42;
+      text-shadow: 0 0 15px rgba(255, 30, 66, 0.8);
+    }
+    .overlay p { color: #8e95a5; font-size: 1rem; }
+    .btn-action {
+      background: transparent;
+      color: #00f3ff;
+      border: 1px solid #00f3ff;
+      padding: 10px 24px;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(0, 243, 255, 0.4);
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: #00f3ff;
+      color: #050608;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="score-box">ПОЙМАНО: <span id="valScore">0</span></div>
+    <div class="lives-box">ЗДАНИЕ: <span id="valLives">❤❤❤</span></div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="overlay" id="screenGameOver" style="display: none;">
+    <h2>ЗДАНИЕ ЗАГРЯЗНЕНО!</h2>
+    <p>АльфаСеллер не выдержал массированной атаки.</p>
+    <p style="color: #00f3ff;">Всего перехвачено: <span id="valFinalScore">0</span></p>
+    <button class="btn-action" id="btnRestart">ОТБИТЬ АТАКУ СНОВА</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const valScore = document.getElementById('valScore');
+    const valLives = document.getElementById('valLives');
+    const screenGameOver = document.getElementById('screenGameOver');
+    const valFinalScore = document.getElementById('valFinalScore');
+    const btnRestart = document.getElementById('btnRestart');
+
+    function resize() {
+      canvas.width = Math.min(window.innerWidth, 550);
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let score = 0;
+    let lives = 3;
+    let isRunning = true;
+    let spawnTimer = 0;
+
+    // Игрок с корзиной
+    const player = {
+      w: 64,
+      h: 40,
+      x: canvas.width / 2 - 32,
+      y: canvas.height - 130,
+      speed: 7
+    };
+
+    const drops = [];
+    const splats = [];
+
+    // Управление
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    let isPointerDown = false;
+    window.addEventListener('pointerdown', e => {
+      isPointerDown = true;
+      movePlayer(e);
+    });
+    window.addEventListener('pointermove', e => {
+      if (isPointerDown) movePlayer(e);
+    });
+    window.addEventListener('pointerup', () => isPointerDown = false);
+
+    function movePlayer(e) {
+      const rect = canvas.getBoundingClientRect();
+      const targetX = e.clientX - rect.left - player.w / 2;
+      player.x += (targetX - player.x) * 0.25;
+    }
+
+    function spawnDrop() {
+      drops.push({
+        x: 40 + Math.random() * (canvas.width - 80),
+        y: 85,
+        speed: 2.8 + Math.random() * 2 + Math.min(score * 0.08, 4),
+        size: 26
+      });
+    }
+
+    function update() {
+      if (!isRunning) return;
+
+      if (keys['KeyA'] || keys['ArrowLeft']) player.x -= player.speed;
+      if (keys['KeyD'] || keys['ArrowRight']) player.x += player.speed;
+
+      player.x = Math.max(10, Math.min(canvas.width - player.w - 10, player.x));
+
+      // Таймер сброса
+      spawnTimer++;
+      const currentRate = Math.max(30, 75 - Math.floor(score * 0.8));
+      if (spawnTimer > currentRate) {
+        spawnDrop();
+        spawnTimer = 0;
+      }
+
+      const buildingRoofY = canvas.height - 85;
+
+      for (let i = drops.length - 1; i >= 0; i--) {
+        const d = drops[i];
+        d.y += d.speed;
+
+        // Попадание в корзину игрока
+        if (
+          d.x + d.size / 2 > player.x &&
+          d.x - d.size / 2 < player.x + player.w &&
+          d.y + d.size / 2 > player.y &&
+          d.y - d.size / 2 < player.y + player.h
+        ) {
+          score++;
+          valScore.textContent = score;
+          drops.splice(i, 1);
+          continue;
+        }
+
+        // Удар по зданию внизу
+        if (d.y >= buildingRoofY) {
+          lives--;
+          valLives.textContent = '❤'.repeat(Math.max(0, lives));
+
+          splats.push({
+            x: d.x,
+            y: buildingRoofY,
+            r: 12 + Math.random() * 6
+          });
+
+          drops.splice(i, 1);
+
+          if (lives <= 0) {
+            gameOver();
+            return;
+          }
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Верхнее здание «Адвант Шоп»
+      ctx.fillStyle = '#141824';
+      ctx.fillRect(20, 0, canvas.width - 40, 80);
+      ctx.strokeStyle = '#ff1e42';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, 0, canvas.width - 40, 80);
+
+      // Вывеска сверху
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#0066ff';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.strokeText('АДВАНТ ШОП', canvas.width / 2, 35);
+      ctx.fillText('АДВАНТ ШОП', canvas.width / 2, 35);
+
+      // Человечки-метатели на крыше
+      ctx.fillStyle = '#8e95a5';
+      [-80, 0, 80].forEach(offset => {
+        const cx = canvas.width / 2 + offset;
+        ctx.beginPath();
+        ctx.arc(cx, 68, 5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 2. Нижнее здание «АльфаСеллер»
+      const bY = canvas.height - 85;
+      ctx.fillStyle = '#161922';
+      ctx.fillRect(20, bY, canvas.width - 40, 85);
+      ctx.strokeStyle = '#00f3ff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(20, bY, canvas.width - 40, 85);
+
+      // Вывеска снизу
+      ctx.font = 'bold 18px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#00f3ff';
+      ctx.fillText('АЛЬФАСЕЛЛЕР', canvas.width / 2, bY + 45);
+
+      // Пятна на крыше от пропущенных ударов
+      splats.forEach(s => {
+        ctx.fillStyle = '#6b4423';
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y, s.r, s.r * 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 3. Падающие эмодзи
+      ctx.font = '24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      drops.forEach(d => {
+        ctx.fillText('💩', d.x, d.y);
+      });
+
+      // 4. Игрок с корзиной
+      // Фигурка человека
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(player.x + player.w / 2, player.y + 24, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Руки, держащие корзину
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(player.x + 8, player.y + 12);
+      ctx.lineTo(player.x + player.w / 2, player.y + 24);
+      ctx.lineTo(player.x + player.w - 8, player.y + 12);
+      ctx.stroke();
+
+      // Корзина
+      ctx.fillStyle = '#d4a373';
+      ctx.beginPath();
+      ctx.roundRect(player.x, player.y, player.w, 16, [0, 0, 6, 6]);
+      ctx.fill();
+      ctx.strokeStyle = '#8b5a2b';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (isRunning) requestAnimationFrame(loop);
+    }
+
+    function gameOver() {
+      isRunning = false;
+      valFinalScore.textContent = score;
+      screenGameOver.style.display = 'flex';
+    }
+
+    function restart() {
+      score = 0;
+      lives = 3;
+      drops.length = 0;
+      splats.length = 0;
+      player.x = canvas.width / 2 - player.w / 2;
+      valScore.textContent = '0';
+      valLives.textContent = '❤❤❤';
+      screenGameOver.style.display = 'none';
+      isRunning = true;
+      loop();
+    }
+
+    btnRestart.addEventListener('click', restart);
+    loop();
+  </script>
+</body>
+</html>
